@@ -34,7 +34,14 @@ const defaultItems = [
   { label: "Calendar", icon: CalendarDays, href: "#calendar" },
 ];
 
-function Sidebar({ items = defaultItems, activeItem = "Dashboard" }) {
+function Sidebar({ items = defaultItems, activeItem = "Dashboard", onNavigate }) {
+  const handleNavigate = (event, label) => {
+    if (onNavigate) {
+      event.preventDefault();
+      onNavigate(label);
+    }
+  };
+
   return (
     <aside className="w-72 min-h-screen border-r border-slate-800/80 bg-[radial-gradient(circle_at_top,_rgba(125,211,252,0.18),_rgba(15,23,42,0)_32%),linear-gradient(180deg,#020817_0%,#0f172a_44%,#111827_100%)] text-slate-100 shadow-[0_0_30px_rgba(14,116,144,0.18)]">
       <div className="flex h-full flex-col p-5">
@@ -61,6 +68,7 @@ function Sidebar({ items = defaultItems, activeItem = "Dashboard" }) {
                 <li key={label}>
                   <a
                     href={href}
+                    onClick={(event) => handleNavigate(event, label)}
                     aria-current={isActive ? "page" : undefined}
                     className={[
                       "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ease-out",
