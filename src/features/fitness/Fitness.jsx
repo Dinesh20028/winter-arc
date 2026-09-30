@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Activity,
   ArrowRight,
@@ -7,6 +7,7 @@ import {
   Dumbbell,
   Flame,
   HeartPulse,
+  Pause,
   Play,
   Target,
   TimerReset,
@@ -79,12 +80,41 @@ const recentWorkouts = [
   { title: 'Lower Body Strength', duration: '60 min', when: '2 days ago' },
 ];
 
-function Fitness() {
-  const [workoutStarted, setWorkoutStarted] = useState(false);
+const formatDuration = (totalSeconds) => {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+};
 
-  const toggleWorkout = () => {
-    setWorkoutStarted((prev) => !prev);
+function Fitness() {
+  const [workoutStatus, setWorkoutStatus] = useState('idle');
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [completedDuration, setCompletedDuration] = useState(null);
+
+  useEffect(() => {
+    if (workoutStatus !== 'running') {
+      return undefined;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setElapsedSeconds((seconds) => seconds + 1);
+    }, 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, [workoutStatus]);
+
+  const startWorkout = () => {
+    setElapsedSeconds(0);
+    setCompletedDuration(null);
+    setWorkoutStatus('running');
   };
+
+  const endWorkout = () => {
+    setCompletedDuration(elapsedSeconds);
+    setWorkoutStatus('completed');
+  };
+
+  const isWorkoutActive = workoutStatus === 'running' || workoutStatus === 'paused';
 
   return (
     <main className="min-h-screen overflow-x-hidden bg-slate-950 px-4 py-6 text-slate-50 sm:px-6 lg:px-8">
@@ -125,25 +155,58 @@ function Fitness() {
               </div>
               <button
                 type="button"
-                onClick={toggleWorkout}
+                onClick={
+                  workoutStatus === 'running'
+                    ? () => setWorkoutStatus('paused')
+                    : workoutStatus === 'paused'
+                      ? () => setWorkoutStatus('running')
+                      : startWorkout
+                }
                 className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-medium transition-all duration-300 ${
-                  workoutStarted
+                  isWorkoutActive
                     ? 'border-emerald-400/60 bg-emerald-500/15 text-emerald-50 shadow-[0_0_0_1px_rgba(16,185,129,0.22)]'
                     : 'border-red-400/30 bg-red-500/10 text-red-100 hover:border-red-300/60 hover:bg-red-500/15'
                 }`}
               >
-                {workoutStarted ? (
+                {workoutStatus === 'running' ? (
+                  <Pause className="h-4 w-4" />
+                ) : workoutStatus === 'paused' ? (
+                  <Play className="h-3.5 w-3.5 fill-current" />
+                ) : workoutStatus === 'completed' ? (
                   <CheckCircle2 className="h-4 w-4" />
                 ) : (
                   <Play className="h-3.5 w-3.5 fill-current" />
                 )}
-                {workoutStarted ? 'Workout Started' : 'Start Workout'}
+                {workoutStatus === 'running'
+                  ? 'Pause Workout'
+                  : workoutStatus === 'paused'
+                    ? 'Resume Workout'
+                    : 'Start Workout'}
               </button>
             </div>
 
-            {workoutStarted && (
+            {isWorkoutActive && (
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100 shadow-[0_0_0_1px_rgba(16,185,129,0.12)] transition-all duration-300">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span>{workoutStatus === 'running' ? 'Workout in progress' : 'Workout paused'}</span>
+                  <span className="font-mono font-semibold tabular-nums">{formatDuration(elapsedSeconds)}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={endWorkout}
+                  className="rounded-full border border-emerald-300/40 px-3 py-1 text-xs font-semibold text-emerald-50 transition-colors duration-200 hover:bg-emerald-400/15"
+                >
+                  End Workout
+                </button>
+              </div>
+            )}
+
+            {workoutStatus === 'completed' && (
               <div className="mb-4 rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100 shadow-[0_0_0_1px_rgba(16,185,129,0.12)] transition-all duration-300">
-                Workout session started. Stay focused!
+                <p>Workout completed! Great work.</p>
+                <p className="mt-1 text-xs text-emerald-200/80">
+                  Total workout duration: <span className="font-mono font-semibold tabular-nums">{formatDuration(completedDuration)}</span>
+                </p>
               </div>
             )}
 
