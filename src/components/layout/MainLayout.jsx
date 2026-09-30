@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Sidebar from './Sidebar';
 import Dashboard from '../dashboard/Dashboard';
 import DailyTasks from '../../features/tasks/DailyTasks';
+import Goals from '../../features/goals/Goals';
 
 function MainLayout({ children }) {
   const [activePage, setActivePage] = useState('Dashboard');
@@ -13,6 +14,10 @@ function MainLayout({ children }) {
 
     if (activePage === 'Daily Tasks') {
       return <DailyTasks />;
+    }
+
+    if (activePage === 'Goals') {
+      return <Goals />;
     }
 
     return (
