@@ -3,6 +3,7 @@ import Sidebar from './Sidebar';
 import Dashboard from '../dashboard/Dashboard';
 import DailyTasks from '../../features/tasks/DailyTasks';
 import Goals from '../../features/goals/Goals';
+import Fitness from '../../features/fitness/Fitness';
 
 function MainLayout({ children }) {
   const [activePage, setActivePage] = useState('Dashboard');
@@ -18,6 +19,10 @@ function MainLayout({ children }) {
 
     if (activePage === 'Goals') {
       return <Goals />;
+    }
+
+    if (activePage === 'Fitness') {
+      return <Fitness />;
     }
 
     return (
