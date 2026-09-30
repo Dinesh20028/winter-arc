@@ -6,6 +6,7 @@ import Goals from '../../features/goals/Goals';
 import Fitness from '../../features/fitness/Fitness';
 import Coding from '../../features/coding/Coding';
 import Study from '../../features/study/Study';
+import English from '../../features/english/English';
 
 function MainLayout({ children }) {
   const [activePage, setActivePage] = useState('Dashboard');
@@ -33,6 +34,10 @@ function MainLayout({ children }) {
 
     if (activePage === 'Study') {
       return <Study />;
+    }
+
+    if (activePage === 'English') {
+      return <English />;
     }
 
     return (
