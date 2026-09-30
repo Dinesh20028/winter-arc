@@ -12,6 +12,7 @@ import {
   Trophy,
   Zap,
 } from 'lucide-react';
+import { useApp } from '../../context/AppContext';
 import StreakCard from './StreakCard';
 import ProgressChart from './ProgressChart';
 
@@ -64,6 +65,43 @@ const recentActivity = [
 ];
 
 function Dashboard({ user = { name: 'Aiden' } }) {
+  const { totalXp, completedTaskCount, taskProgress, currentStreak, bestStreak } = useApp();
+
+  const summaryStats = [
+    {
+      label: 'Current streak',
+      value: `${currentStreak} days`,
+      detail: '+3 this week',
+      icon: Flame,
+      accent: 'from-orange-400/20 via-amber-400/10 to-transparent',
+      iconClass: 'bg-orange-500/15 text-orange-200',
+    },
+    {
+      label: 'Current rank',
+      value: '#12',
+      detail: 'Top 8%',
+      icon: Trophy,
+      accent: 'from-cyan-400/20 via-sky-400/10 to-transparent',
+      iconClass: 'bg-cyan-500/15 text-cyan-100',
+    },
+    {
+      label: 'XP',
+      value: totalXp.toLocaleString(),
+      detail: 'Level 18',
+      icon: Zap,
+      accent: 'from-violet-400/20 via-fuchsia-400/10 to-transparent',
+      iconClass: 'bg-violet-500/15 text-violet-100',
+    },
+    {
+      label: 'Focus',
+      value: `${Math.round(taskProgress)}%`,
+      detail: 'Consistency',
+      icon: Gauge,
+      accent: 'from-emerald-400/20 via-teal-400/10 to-transparent',
+      iconClass: 'bg-emerald-500/15 text-emerald-100',
+    },
+  ];
+
   return (
     <main className="min-h-screen bg-slate-950 text-slate-50">
       <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
@@ -120,13 +158,16 @@ function Dashboard({ user = { name: 'Aiden' } }) {
                 <div className="rounded-2xl border border-slate-700/80 bg-slate-950/80 p-4">
                   <div className="mb-3 flex items-center justify-between text-sm text-slate-300">
                     <span>Mission progress</span>
-                    <span className="font-medium text-cyan-200">72%</span>
+                    <span className="font-medium text-cyan-200">{Math.round(taskProgress)}%</span>
                   </div>
                   <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-800">
-                    <div className="h-full w-[72%] rounded-full bg-gradient-to-r from-cyan-400 via-sky-400 to-blue-500" />
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-cyan-400 via-sky-400 to-blue-500"
+                      style={{ width: `${taskProgress}%` }}
+                    />
                   </div>
                   <div className="mt-4 flex items-center justify-between text-sm text-slate-400">
-                    <span>3 of 4 milestones</span>
+                    <span>{completedTaskCount} of {Math.max(4, 10)} milestones</span>
                     <button className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-xs font-medium text-slate-200 transition hover:border-slate-600 hover:text-white">
                       View task
                       <ArrowUpRight className="h-3.5 w-3.5" />
@@ -135,7 +176,12 @@ function Dashboard({ user = { name: 'Aiden' } }) {
                 </div>
               </article>
 
-              <StreakCard />
+              <StreakCard
+                currentStreak={currentStreak}
+                bestStreak={bestStreak}
+                xpEarnedToday={totalXp}
+                nextRankProgress={Math.min(taskProgress, 100)}
+              />
             </div>
 
             <article className="rounded-3xl border border-slate-800 bg-slate-900/70 p-5 shadow-[0_18px_40px_rgba(15,23,42,0.45)] backdrop-blur-sm">

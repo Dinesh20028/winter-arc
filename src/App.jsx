@@ -1,11 +1,11 @@
 import MainLayout from './components/layout/MainLayout'
-import Dashboard from './components/dashboard/Dashboard'
+import { AppProvider } from './context/AppContext'
 
 function App() {
   return (
-    <MainLayout>
-      <Dashboard />
-    </MainLayout>
+    <AppProvider>
+      <MainLayout />
+    </AppProvider>
   )
 }
 

@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Check, CheckCheck, Flame, Sparkles, Target, Zap } from 'lucide-react';
-import { dailyTasks as initialTasks } from './taskData';
+import { useApp } from '../../context/AppContext';
 
 const categoryStyles = {
   Fitness: 'border-red-400/30 bg-red-500/10 text-red-200',
@@ -11,21 +11,10 @@ const categoryStyles = {
 };
 
 function DailyTasks() {
-  const [tasks, setTasks] = useState(initialTasks);
+  const { tasks, totalXp, completedTaskCount, taskProgress, toggleTask } = useApp();
 
-  const completedCount = tasks.filter((task) => task.completed).length;
-  const totalXp = tasks
-    .filter((task) => task.completed)
-    .reduce((sum, task) => sum + task.xp, 0);
-  const progress = (completedCount / tasks.length) * 100;
-
-  const toggleTask = (taskId) => {
-    setTasks((currentTasks) =>
-      currentTasks.map((task) =>
-        task.id === taskId ? { ...task, completed: !task.completed } : task,
-      ),
-    );
-  };
+  const completedCount = completedTaskCount;
+  const progress = taskProgress;
 
   return (
     <section className="min-h-screen bg-slate-950 px-4 py-6 text-slate-50 sm:px-6 lg:px-8">
