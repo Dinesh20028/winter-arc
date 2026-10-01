@@ -5,6 +5,7 @@ import Progress from '../../features/progress/Progress';
 import Achievements from '../../features/achievements/Achievements';
 import Profile from '../../features/profile/Profile';
 import Settings from '../../features/settings/Settings';
+import Calendar from '../../features/calendar/Calendar';
 import DailyTasks from '../../features/tasks/DailyTasks';
 import Goals from '../../features/goals/Goals';
 import Fitness from '../../features/fitness/Fitness';
@@ -36,6 +37,10 @@ function MainLayout({ children }) {
 
     if (activePage === 'Settings') {
       return <Settings />;
+    }
+
+    if (activePage === 'Calendar') {
+      return <Calendar />;
     }
 
     if (activePage === 'Daily Tasks') {
