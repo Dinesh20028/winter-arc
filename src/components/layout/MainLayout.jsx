@@ -8,6 +8,7 @@ import Coding from '../../features/coding/Coding';
 import Study from '../../features/study/Study';
 import English from '../../features/english/English';
 import Money from '../../features/money/Money';
+import Contest from '../../features/contest/Contest';
 
 function MainLayout({ children }) {
   const [activePage, setActivePage] = useState('Dashboard');
@@ -43,6 +44,10 @@ function MainLayout({ children }) {
 
     if (activePage === 'Money') {
       return <Money />;
+    }
+
+    if (activePage === 'Contest') {
+      return <Contest />;
     }
 
     return (
