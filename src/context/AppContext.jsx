@@ -8,12 +8,13 @@ export function AppProvider({ children }) {
   const [currentStreak] = useState(18);
   const [bestStreak] = useState(24);
 
-  const totalXp = tasks
-    .filter((task) => task.completed)
-    .reduce((sum, task) => sum + task.xp, 0);
+  const completedTasks = tasks.filter((task) => task.completed);
+  const totalXp = completedTasks.reduce((sum, task) => sum + task.xp, 0);
+  const totalPossibleXp = tasks.reduce((sum, task) => sum + task.xp, 0);
 
-  const completedTaskCount = tasks.filter((task) => task.completed).length;
-  const taskProgress = tasks.length > 0 ? (completedTaskCount / tasks.length) * 100 : 0;
+  const completedTaskCount = completedTasks.length;
+  const taskProgress = tasks.length > 0 ? Math.min((completedTaskCount / tasks.length) * 100, 100) : 0;
+  const xpProgress = totalPossibleXp > 0 ? Math.min((totalXp / totalPossibleXp) * 100, 100) : 0;
 
   const toggleTask = (taskId) => {
     setTasks((currentTasks) =>
@@ -29,7 +30,10 @@ export function AppProvider({ children }) {
 
   const value = {
     tasks,
+    completedTasks,
     totalXp,
+    totalPossibleXp,
+    xpProgress,
     currentStreak,
     bestStreak,
     completedTaskCount,

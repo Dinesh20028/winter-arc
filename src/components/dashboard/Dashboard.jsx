@@ -65,7 +65,7 @@ const recentActivity = [
 ];
 
 function Dashboard({ user = { name: 'Aiden' } }) {
-  const { totalXp, completedTaskCount, taskProgress, currentStreak, bestStreak } = useApp();
+  const { tasks, totalXp, completedTaskCount, taskProgress, xpProgress, currentStreak, bestStreak } = useApp();
 
   const summaryStats = [
     {
@@ -167,7 +167,7 @@ function Dashboard({ user = { name: 'Aiden' } }) {
                     />
                   </div>
                   <div className="mt-4 flex items-center justify-between text-sm text-slate-400">
-                    <span>{completedTaskCount} of {Math.max(4, 10)} milestones</span>
+                    <span>{completedTaskCount} of {tasks.length} milestones</span>
                     <button className="inline-flex items-center gap-1 rounded-full border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-xs font-medium text-slate-200 transition hover:border-slate-600 hover:text-white">
                       View task
                       <ArrowUpRight className="h-3.5 w-3.5" />
@@ -180,7 +180,7 @@ function Dashboard({ user = { name: 'Aiden' } }) {
                 currentStreak={currentStreak}
                 bestStreak={bestStreak}
                 xpEarnedToday={totalXp}
-                nextRankProgress={Math.min(taskProgress, 100)}
+                nextRankProgress={xpProgress}
               />
             </div>
 
