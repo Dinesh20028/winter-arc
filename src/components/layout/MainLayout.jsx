@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import Sidebar from './Sidebar';
 import Dashboard from '../dashboard/Dashboard';
+import Progress from '../../features/progress/Progress';
 import DailyTasks from '../../features/tasks/DailyTasks';
 import Goals from '../../features/goals/Goals';
 import Fitness from '../../features/fitness/Fitness';
@@ -16,6 +17,10 @@ function MainLayout({ children }) {
   const renderContent = () => {
     if (activePage === 'Dashboard') {
       return <Dashboard />;
+    }
+
+    if (activePage === 'Progress') {
+      return <Progress />;
     }
 
     if (activePage === 'Daily Tasks') {
