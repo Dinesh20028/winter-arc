@@ -7,6 +7,7 @@ import Fitness from '../../features/fitness/Fitness';
 import Coding from '../../features/coding/Coding';
 import Study from '../../features/study/Study';
 import English from '../../features/english/English';
+import Money from '../../features/money/Money';
 
 function MainLayout({ children }) {
   const [activePage, setActivePage] = useState('Dashboard');
@@ -38,6 +39,10 @@ function MainLayout({ children }) {
 
     if (activePage === 'English') {
       return <English />;
+    }
+
+    if (activePage === 'Money') {
+      return <Money />;
     }
 
     return (
