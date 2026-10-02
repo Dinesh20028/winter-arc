@@ -111,6 +111,7 @@ export function AppProvider({ children }) {
       'Coding',
       'Study',
       'English',
+      'Money',
     ];
 
     const dailyProgress = categories.reduce(
