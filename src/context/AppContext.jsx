@@ -1,4 +1,9 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+} from 'react';
 import { dailyTasks as initialTasks } from '../features/tasks/taskData';
 import {
   getTodayKey,
@@ -6,6 +11,25 @@ import {
 } from '../data/dailyHistory';
 
 const AppContext = createContext(null);
+
+const SETTINGS_KEY = 'winterArcSettings';
+
+const defaultSettings = {
+  theme: 'Dark',
+  accentGlow: 'Winter Blue',
+  compactMode: false,
+
+  dailyMissionReminder: true,
+  streakReminder: true,
+  achievementNotifications: true,
+  leaderboardUpdates: false,
+
+  streakProtection: true,
+
+  profileVisibility: 'Friends',
+  showGlobalLeaderboard: true,
+  showCurrentStreak: true,
+};
 
 function getRankFromStreak(streak) {
   if (streak >= 90) return 'Winter Master';
@@ -35,8 +59,12 @@ function getCurrentStreak() {
 
   while (true) {
     const year = checkDate.getFullYear();
-    const month = String(checkDate.getMonth() + 1).padStart(2, '0');
-    const day = String(checkDate.getDate()).padStart(2, '0');
+    const month = String(
+      checkDate.getMonth() + 1,
+    ).padStart(2, '0');
+    const day = String(
+      checkDate.getDate(),
+    ).padStart(2, '0');
 
     const dateKey = `${year}-${month}-${day}`;
 
@@ -49,10 +77,30 @@ function getCurrentStreak() {
     }
 
     streak += 1;
-    checkDate.setDate(checkDate.getDate() - 1);
+    checkDate.setDate(
+      checkDate.getDate() - 1,
+    );
   }
 
   return streak;
+}
+
+function getSavedSettings() {
+  const savedSettings =
+    localStorage.getItem(SETTINGS_KEY);
+
+  if (!savedSettings) {
+    return defaultSettings;
+  }
+
+  try {
+    return {
+      ...defaultSettings,
+      ...JSON.parse(savedSettings),
+    };
+  } catch {
+    return defaultSettings;
+  }
 }
 
 export function AppProvider({ children }) {
@@ -68,17 +116,22 @@ export function AppProvider({ children }) {
       : initialTasks;
   });
 
-  const [currentStreak, setCurrentStreak] = useState(() =>
-    getCurrentStreak(),
-  );
+  const [currentStreak, setCurrentStreak] =
+    useState(() => getCurrentStreak());
 
-  const [bestStreak, setBestStreak] = useState(() => {
-    const savedBest = localStorage.getItem(
-      'winterArcBestStreak',
-    );
+  const [bestStreak, setBestStreak] =
+    useState(() => {
+      const savedBest = localStorage.getItem(
+        'winterArcBestStreak',
+      );
 
-    return savedBest ? Number(savedBest) : 0;
-  });
+      return savedBest
+        ? Number(savedBest)
+        : 0;
+    });
+
+  const [settings, setSettings] =
+    useState(getSavedSettings);
 
   const completedTasks = tasks.filter(
     (task) => task.completed,
@@ -94,7 +147,8 @@ export function AppProvider({ children }) {
     0,
   );
 
-  const completedTaskCount = completedTasks.length;
+  const completedTaskCount =
+    completedTasks.length;
 
   const isTodayComplete =
     tasks.length > 0 &&
@@ -114,30 +168,33 @@ export function AppProvider({ children }) {
       'Money',
     ];
 
-    const dailyProgress = categories.reduce(
-      (result, category) => {
-        const categoryTasks = tasks.filter(
-          (task) => task.category === category,
-        );
+    const dailyProgress =
+      categories.reduce(
+        (result, category) => {
+          const categoryTasks =
+            tasks.filter(
+              (task) =>
+                task.category === category,
+            );
 
-        const completedCategoryTasks =
-          categoryTasks.filter(
-            (task) => task.completed,
-          );
+          const completedCategoryTasks =
+            categoryTasks.filter(
+              (task) => task.completed,
+            );
 
-        result[category] =
-          categoryTasks.length > 0
-            ? Math.round(
-                (completedCategoryTasks.length /
-                  categoryTasks.length) *
-                  100,
-              )
-            : 0;
+          result[category] =
+            categoryTasks.length > 0
+              ? Math.round(
+                  (completedCategoryTasks.length /
+                    categoryTasks.length) *
+                    100,
+                )
+              : 0;
 
-        return result;
-      },
-      {},
-    );
+          return result;
+        },
+        {},
+      );
 
     const dailyHistoryEntry = {
       ...dailyProgress,
@@ -145,9 +202,10 @@ export function AppProvider({ children }) {
       totalTaskCount: tasks.length,
       xpEarned: totalXp,
       totalPossibleXp,
-      completedTaskIds: completedTasks.map(
-        (task) => task.id,
-      ),
+      completedTaskIds:
+        completedTasks.map(
+          (task) => task.id,
+        ),
     };
 
     saveDailyProgress(
@@ -177,7 +235,8 @@ export function AppProvider({ children }) {
       );
     }
 
-    const updatedStreak = getCurrentStreak();
+    const updatedStreak =
+      getCurrentStreak();
 
     setCurrentStreak(updatedStreak);
 
@@ -194,12 +253,48 @@ export function AppProvider({ children }) {
 
       return nextBest;
     });
-  }, [isTodayComplete, todayKey]);
+  }, [
+    isTodayComplete,
+    todayKey,
+  ]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      SETTINGS_KEY,
+      JSON.stringify(settings),
+    );
+
+    document.documentElement.dataset.theme =
+      settings.theme
+        .toLowerCase()
+        .replace(/\s+/g, '-');
+
+    document.documentElement.dataset.accent =
+      settings.accentGlow
+        .toLowerCase()
+        .replace(/\s+/g, '-');
+
+    document.documentElement.dataset.compact =
+      settings.compactMode
+        ? 'true'
+        : 'false';
+  }, [settings]);
+
+  const updateSetting = (
+    key,
+    value,
+  ) => {
+    setSettings((currentSettings) => ({
+      ...currentSettings,
+      [key]: value,
+    }));
+  };
 
   const taskProgress =
     tasks.length > 0
       ? Math.min(
-          (completedTaskCount / tasks.length) *
+          (completedTaskCount /
+            tasks.length) *
             100,
           100,
         )
@@ -208,14 +303,17 @@ export function AppProvider({ children }) {
   const xpProgress =
     totalPossibleXp > 0
       ? Math.min(
-          (totalXp / totalPossibleXp) *
+          (totalXp /
+            totalPossibleXp) *
             100,
           100,
         )
       : 0;
 
   const rank =
-    getRankFromStreak(currentStreak);
+    getRankFromStreak(
+      currentStreak,
+    );
 
   const nextRank =
     getNextRank(currentStreak);
@@ -225,9 +323,11 @@ export function AppProvider({ children }) {
     Math.floor(totalXp / 100) + 1,
   );
 
-  const xpIntoLevel = totalXp % 100;
+  const xpIntoLevel =
+    totalXp % 100;
 
-  const levelProgress = xpIntoLevel;
+  const levelProgress =
+    xpIntoLevel;
 
   const toggleTask = (taskId) => {
     setTasks((currentTasks) =>
@@ -262,6 +362,10 @@ export function AppProvider({ children }) {
     xpIntoLevel,
     levelProgress,
     todayKey,
+
+    // Shared application settings
+    settings,
+    updateSetting,
   };
 
   return (
@@ -272,7 +376,8 @@ export function AppProvider({ children }) {
 }
 
 export function useApp() {
-  const context = useContext(AppContext);
+  const context =
+    useContext(AppContext);
 
   if (!context) {
     throw new Error(
