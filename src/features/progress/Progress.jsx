@@ -104,46 +104,41 @@ function buildWeeklyGrowthData(dailyHistory) {
 
 
 const milestones = [
-	{
-		day: 30,
-		title: 'Bronze',
-		detail: 'First month complete',
-		icon: Award,
-		status: 'completed',
-		color: 'text-amber-300',
-	},
-	{
-		day: 45,
-		title: 'Diamond',
-		detail: 'Next milestone',
-		icon: Sparkles,
-		status: 'current',
-		color: 'text-cyan-200',
-	},
-	{
-		day: 60,
-		title: 'Elite',
-		detail: 'Two-thirds through',
-		icon: Zap,
-		status: 'upcoming',
-		color: 'text-violet-300',
-	},
-	{
-		day: 75,
-		title: 'Master',
-		detail: 'Final stretch',
-		icon: Trophy,
-		status: 'upcoming',
-		color: 'text-rose-300',
-	},
-	{
-		day: 90,
-		title: 'Winter Master',
-		detail: 'Challenge complete',
-		icon: LockKeyhole,
-		status: 'upcoming',
-		color: 'text-slate-400',
-	},
+  {
+    day: 30,
+    title: 'Bronze',
+    detail: 'First month complete',
+    icon: Award,
+    color: 'text-amber-300',
+  },
+  {
+    day: 45,
+    title: 'Diamond',
+    detail: 'Next milestone',
+    icon: Sparkles,
+    color: 'text-cyan-200',
+  },
+  {
+    day: 60,
+    title: 'Elite',
+    detail: 'Two-thirds through',
+    icon: Zap,
+    color: 'text-violet-300',
+  },
+  {
+    day: 75,
+    title: 'Master',
+    detail: 'Final stretch',
+    icon: Trophy,
+    color: 'text-rose-300',
+  },
+  {
+    day: 90,
+    title: 'Winter Master',
+    detail: 'Challenge complete',
+    icon: LockKeyhole,
+    color: 'text-slate-400',
+  },
 ];
 
 const chartTick = { fill: '#64748b', fontSize: 11 };
@@ -800,9 +795,11 @@ const categories = categoryConfig.map((category) => ({
 
 					<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
 						{milestones.map(
-							({ day, title, detail, icon: Icon, status, color }) => {
-								const completed = status === 'completed';
-								const current = status === 'current';
+							({ day, title, detail, icon: Icon, color }) => {
+                             const completed = challengeDay >= day;
+                             const current =
+                                challengeDay < day &&
+                                (day === 30 || challengeDay >= day - 15);
 
 								return (
 									<article
