@@ -16,15 +16,20 @@ import Money from '../../features/money/Money';
 import Contest from '../../features/contest/Contest';
 
 function MainLayout() {
-  const [activePage, setActivePage] =
-    useState('Dashboard');
+  const [activePage, setActivePage] = useState('Dashboard');
 
   const renderContent = () => {
     if (activePage === 'Dashboard') return <Dashboard />;
     if (activePage === 'Progress') return <Progress />;
     if (activePage === 'Achievements') return <Achievements />;
     if (activePage === 'Profile') return <Profile />;
-    if (activePage === 'Settings') return <Settings />;
+    if (activePage === 'Settings') {
+      return (
+        <Settings
+          onNavigate={setActivePage}
+        />
+      );
+    }
     if (activePage === 'Calendar') return <Calendar />;
     if (activePage === 'Daily Tasks') return <DailyTasks />;
     if (activePage === 'Goals') return <Goals />;

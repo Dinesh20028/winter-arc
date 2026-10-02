@@ -9,10 +9,13 @@ import {
   getTodayKey,
   saveDailyProgress,
 } from '../data/dailyHistory';
+import { supabase } from '../lib/supabase';
 
 const AppContext = createContext(null);
 
 const SETTINGS_KEY = 'winterArcSettings';
+const NOTIFICATION_KEY =
+  'winterArcNotificationHistory';
 
 const defaultSettings = {
   theme: 'Dark',
@@ -53,38 +56,6 @@ function getNextRank(streak) {
   return 'Complete';
 }
 
-function getCurrentStreak() {
-  let streak = 0;
-  let checkDate = new Date();
-
-  while (true) {
-    const year = checkDate.getFullYear();
-    const month = String(
-      checkDate.getMonth() + 1,
-    ).padStart(2, '0');
-    const day = String(
-      checkDate.getDate(),
-    ).padStart(2, '0');
-
-    const dateKey = `${year}-${month}-${day}`;
-
-    const completed = localStorage.getItem(
-      `winterArcCompleted-${dateKey}`,
-    );
-
-    if (completed !== 'true') {
-      break;
-    }
-
-    streak += 1;
-    checkDate.setDate(
-      checkDate.getDate() - 1,
-    );
-  }
-
-  return streak;
-}
-
 function getSavedSettings() {
   const savedSettings =
     localStorage.getItem(SETTINGS_KEY);
@@ -103,6 +74,108 @@ function getSavedSettings() {
   }
 }
 
+function getNotificationHistory() {
+  const savedHistory = localStorage.getItem(
+    NOTIFICATION_KEY,
+  );
+
+  if (!savedHistory) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(savedHistory);
+  } catch {
+    return {};
+  }
+}
+
+function saveNotificationHistory(history) {
+  localStorage.setItem(
+    NOTIFICATION_KEY,
+    JSON.stringify(history),
+  );
+}
+
+function canUseNotifications() {
+  return (
+    typeof window !== 'undefined' &&
+    'Notification' in window
+  );
+}
+
+async function requestNotificationPermission() {
+  if (!canUseNotifications()) {
+    return false;
+  }
+
+  if (Notification.permission === 'granted') {
+    return true;
+  }
+
+  if (Notification.permission === 'denied') {
+    return false;
+  }
+
+  try {
+    const permission =
+      await Notification.requestPermission();
+
+    return permission === 'granted';
+  } catch {
+    return false;
+  }
+}
+
+function sendNotification(
+  title,
+  body,
+  notificationId,
+) {
+  if (!canUseNotifications()) {
+    return false;
+  }
+
+  if (Notification.permission !== 'granted') {
+    return false;
+  }
+
+  const history = getNotificationHistory();
+
+  if (history[notificationId]) {
+    return false;
+  }
+
+  try {
+    new Notification(title, {
+      body,
+      icon: '/vite.svg',
+      tag: notificationId,
+    });
+
+    history[notificationId] = new Date().toISOString();
+
+    saveNotificationHistory(history);
+
+    return true;
+  } catch (error) {
+    console.error(
+      'Could not show notification:',
+      error,
+    );
+
+    return false;
+  }
+}
+
+function getCurrentHour() {
+  return new Date().getHours();
+}
+
+function getCurrentMinute() {
+  return new Date().getMinutes();
+}
+
 export function AppProvider({ children }) {
   const todayKey = getTodayKey();
 
@@ -117,27 +190,61 @@ export function AppProvider({ children }) {
   });
 
   const [currentStreak, setCurrentStreak] =
-    useState(() => getCurrentStreak());
+    useState(0);
 
   const [bestStreak, setBestStreak] =
-    useState(() => {
-      const savedBest = localStorage.getItem(
-        'winterArcBestStreak',
-      );
+    useState(0);
 
-      return savedBest
-        ? Number(savedBest)
-        : 0;
-    });
+  const [lifetimeXp, setLifetimeXp] =
+    useState(0);
 
   const [settings, setSettings] =
     useState(getSavedSettings);
+
+  const [userId, setUserId] = useState(null);
+
+  /*
+   * Get authenticated user.
+   */
+  useEffect(() => {
+    let mounted = true;
+
+    const loadUser = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (mounted) {
+        setUserId(session?.user?.id || null);
+      }
+    };
+
+    loadUser();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        if (mounted) {
+          setUserId(session?.user?.id || null);
+        }
+      },
+    );
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   const completedTasks = tasks.filter(
     (task) => task.completed,
   );
 
-  const totalXp = completedTasks.reduce(
+  /*
+   * XP earned today.
+   */
+  const todayXp = completedTasks.reduce(
     (sum, task) => sum + task.xp,
     0,
   );
@@ -154,6 +261,69 @@ export function AppProvider({ children }) {
     tasks.length > 0 &&
     completedTaskCount === tasks.length;
 
+  /*
+   * Load current streak, best streak,
+   * and lifetime XP from Supabase.
+   */
+  useEffect(() => {
+    const loadStats = async () => {
+      if (!userId) {
+        return;
+      }
+
+      const [
+        streakResult,
+        xpResult,
+      ] = await Promise.all([
+        supabase.rpc('get_my_streak'),
+        supabase.rpc('get_my_total_xp'),
+      ]);
+
+      if (streakResult.error) {
+        console.error(
+          'Could not load streak:',
+          streakResult.error,
+        );
+      } else if (
+        streakResult.data &&
+        streakResult.data.length > 0
+      ) {
+        setCurrentStreak(
+          Number(
+            streakResult.data[0].current_streak || 0,
+          ),
+        );
+
+        setBestStreak(
+          Number(
+            streakResult.data[0].best_streak || 0,
+          ),
+        );
+      }
+
+      if (xpResult.error) {
+        console.error(
+          'Could not load lifetime XP:',
+          xpResult.error,
+        );
+      } else {
+        setLifetimeXp(
+          Number(xpResult.data || 0),
+        );
+      }
+    };
+
+    loadStats();
+  }, [
+    userId,
+    isTodayComplete,
+    completedTaskCount,
+  ]);
+
+  /*
+   * Save today's progress locally
+   * and to Supabase.
+   */
   useEffect(() => {
     localStorage.setItem(
       `winterArcTasks-${todayKey}`,
@@ -200,7 +370,7 @@ export function AppProvider({ children }) {
       ...dailyProgress,
       completedTaskCount,
       totalTaskCount: tasks.length,
-      xpEarned: totalXp,
+      xpEarned: todayXp,
       totalPossibleXp,
       completedTaskIds:
         completedTasks.map(
@@ -212,52 +382,120 @@ export function AppProvider({ children }) {
       todayKey,
       dailyHistoryEntry,
     );
+
+    const saveToSupabase = async () => {
+      if (!userId) {
+        return;
+      }
+
+      const { error } = await supabase
+        .from('daily_progress')
+        .upsert(
+          {
+            user_id: userId,
+            date: todayKey,
+            completed_task_count:
+              completedTaskCount,
+            total_possible_xp:
+              totalPossibleXp,
+            xp_earned: todayXp,
+            day_complete: isTodayComplete,
+            tasks,
+            updated_at:
+              new Date().toISOString(),
+          },
+          {
+            onConflict: 'user_id,date',
+          },
+        );
+
+      if (error) {
+        console.error(
+          'Could not save daily progress:',
+          error,
+        );
+        return;
+      }
+
+      /*
+       * Refresh lifetime XP after today's
+       * progress has been saved.
+       */
+      const { data: updatedXp, error: xpError } =
+        await supabase.rpc(
+          'get_my_total_xp',
+        );
+
+      if (xpError) {
+        console.error(
+          'Could not refresh lifetime XP:',
+          xpError,
+        );
+        return;
+      }
+
+      setLifetimeXp(
+        Number(updatedXp || 0),
+      );
+    };
+
+    saveToSupabase();
   }, [
     tasks,
     todayKey,
+    userId,
     completedTaskCount,
-    totalXp,
+    todayXp,
     totalPossibleXp,
-  ]);
-
-  useEffect(() => {
-    const completionKey =
-      `winterArcCompleted-${todayKey}`;
-
-    if (isTodayComplete) {
-      localStorage.setItem(
-        completionKey,
-        'true',
-      );
-    } else {
-      localStorage.removeItem(
-        completionKey,
-      );
-    }
-
-    const updatedStreak =
-      getCurrentStreak();
-
-    setCurrentStreak(updatedStreak);
-
-    setBestStreak((previousBest) => {
-      const nextBest = Math.max(
-        previousBest,
-        updatedStreak,
-      );
-
-      localStorage.setItem(
-        'winterArcBestStreak',
-        String(nextBest),
-      );
-
-      return nextBest;
-    });
-  }, [
     isTodayComplete,
-    todayKey,
   ]);
 
+  /*
+   * Update Supabase profile with
+   * database-backed streak, lifetime XP,
+   * and leaderboard visibility.
+   */
+  useEffect(() => {
+    const updateProfile = async () => {
+      if (!userId) {
+        return;
+      }
+
+      const profileRank =
+        getRankFromStreak(currentStreak);
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          current_streak: currentStreak,
+          best_streak: bestStreak,
+          xp: lifetimeXp,
+          rank: profileRank,
+          show_global_leaderboard:
+            settings.showGlobalLeaderboard,
+        })
+        .eq('id', userId);
+
+      if (error) {
+        console.error(
+          'Could not update profile:',
+          error,
+        );
+      }
+    };
+
+    updateProfile();
+  }, [
+    userId,
+    currentStreak,
+    bestStreak,
+    lifetimeXp,
+    settings.showGlobalLeaderboard,
+  ]);
+
+  /*
+   * Save settings locally.
+   */
   useEffect(() => {
     localStorage.setItem(
       SETTINGS_KEY,
@@ -280,6 +518,298 @@ export function AppProvider({ children }) {
         : 'false';
   }, [settings]);
 
+  /*
+   * Ask for notification permission when
+   * the user has at least one notification
+   * feature enabled.
+   */
+  useEffect(() => {
+    const notificationsEnabled =
+      settings.dailyMissionReminder ||
+      settings.streakReminder ||
+      settings.achievementNotifications ||
+      settings.leaderboardUpdates;
+
+    if (!notificationsEnabled) {
+      return;
+    }
+
+    if (!canUseNotifications()) {
+      return;
+    }
+
+    if (Notification.permission !== 'default') {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      requestNotificationPermission();
+    }, 2500);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [
+    settings.dailyMissionReminder,
+    settings.streakReminder,
+    settings.achievementNotifications,
+    settings.leaderboardUpdates,
+  ]);
+
+  /*
+   * Daily mission and streak reminders.
+   *
+   * 8:00 PM  -> daily mission reminder
+   * 10:00 PM -> streak reminder
+   *
+   * The site must be open for these checks.
+   */
+  useEffect(() => {
+    if (!userId) {
+      return;
+    }
+
+    const checkReminders = () => {
+      if (isTodayComplete) {
+        return;
+      }
+
+      const hour = getCurrentHour();
+      const minute = getCurrentMinute();
+
+      if (
+        settings.dailyMissionReminder &&
+        hour >= 20 &&
+        hour < 22
+      ) {
+        sendNotification(
+          'Winter Arc — Daily Mission',
+          `You have ${tasks.length - completedTaskCount} mission${
+            tasks.length - completedTaskCount === 1
+              ? ''
+              : 's'
+          } remaining today.`,
+          `daily-mission-${todayKey}`,
+        );
+      }
+
+      if (
+        settings.streakReminder &&
+        hour >= 22
+      ) {
+        sendNotification(
+          'Winter Arc — Protect Your Streak',
+          'Complete today’s mission before the day ends.',
+          `streak-reminder-${todayKey}`,
+        );
+      }
+
+      /*
+       * Avoid unused-variable warnings while
+       * keeping minute precision available
+       * for future notification scheduling.
+       */
+      void minute;
+    };
+
+    checkReminders();
+
+    const interval = window.setInterval(
+      checkReminders,
+      60 * 1000,
+    );
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [
+    userId,
+    todayKey,
+    tasks.length,
+    completedTaskCount,
+    isTodayComplete,
+    settings.dailyMissionReminder,
+    settings.streakReminder,
+  ]);
+
+  /*
+   * Achievement notification when today's
+   * complete mission is achieved.
+   */
+  useEffect(() => {
+    if (
+      !userId ||
+      !isTodayComplete ||
+      !settings.achievementNotifications
+    ) {
+      return;
+    }
+
+    const notificationId =
+      `achievement-day-${todayKey}`;
+
+    sendNotification(
+      'Winter Arc — Mission Complete! 🏆',
+      `You completed all ${tasks.length} tasks today and earned ${todayXp} XP.`,
+      notificationId,
+    );
+  }, [
+    userId,
+    todayKey,
+    isTodayComplete,
+    tasks.length,
+    todayXp,
+    settings.achievementNotifications,
+  ]);
+
+  /*
+   * Notify on important streak milestones.
+   */
+  useEffect(() => {
+    if (
+      !userId ||
+      !settings.achievementNotifications ||
+      currentStreak <= 0
+    ) {
+      return;
+    }
+
+    const milestones = [
+      7,
+      14,
+      30,
+      45,
+      60,
+      75,
+      90,
+    ];
+
+    if (!milestones.includes(currentStreak)) {
+      return;
+    }
+
+    sendNotification(
+      `Winter Arc — ${getRankFromStreak(
+        currentStreak,
+      )} Rank`,
+      `You reached a ${currentStreak}-day streak! Keep going.`,
+      `streak-milestone-${currentStreak}`,
+    );
+  }, [
+    userId,
+    currentStreak,
+    settings.achievementNotifications,
+  ]);
+
+  /*
+   * Watch the user's profile for leaderboard
+   * XP/rank changes.
+   */
+  useEffect(() => {
+    if (
+      !userId ||
+      !settings.leaderboardUpdates
+    ) {
+      return;
+    }
+
+    let mounted = true;
+
+    const loadProfileSnapshot = async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select(
+          'xp, rank, current_streak',
+        )
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (error || !data || !mounted) {
+        return;
+      }
+
+      const storageKey =
+        `winterArcLeaderboardSnapshot-${userId}`;
+
+      const previousRaw =
+        localStorage.getItem(storageKey);
+
+      const previous = previousRaw
+        ? JSON.parse(previousRaw)
+        : null;
+
+      const current = {
+        xp: Number(data.xp || 0),
+        rank: data.rank || 'Bronze',
+        currentStreak: Number(
+          data.current_streak || 0,
+        ),
+      };
+
+      localStorage.setItem(
+        storageKey,
+        JSON.stringify(current),
+      );
+
+      if (!previous) {
+        return;
+      }
+
+      const rankChanged =
+        previous.rank !== current.rank;
+
+      const xpChanged =
+        previous.xp !== current.xp;
+
+      if (!rankChanged && !xpChanged) {
+        return;
+      }
+
+      let body =
+        'Your leaderboard profile has been updated.';
+
+      if (rankChanged) {
+        body = `You reached ${current.rank} rank.`;
+      } else if (xpChanged) {
+        body = `Your leaderboard XP is now ${current.xp}.`;
+      }
+
+      sendNotification(
+        'Winter Arc — Leaderboard Update 🏅',
+        body,
+        `leaderboard-${current.xp}-${current.rank}`,
+      );
+    };
+
+    loadProfileSnapshot();
+
+    const channel = supabase
+      .channel(
+        `winter-arc-notifications-${userId}`,
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'profiles',
+          filter: `id=eq.${userId}`,
+        },
+        () => {
+          loadProfileSnapshot();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      mounted = false;
+      supabase.removeChannel(channel);
+    };
+  }, [
+    userId,
+    settings.leaderboardUpdates,
+  ]);
+
   const updateSetting = (
     key,
     value,
@@ -300,10 +830,10 @@ export function AppProvider({ children }) {
         )
       : 0;
 
-  const xpProgress =
+  const todayXpProgress =
     totalPossibleXp > 0
       ? Math.min(
-          (totalXp /
+          (todayXp /
             totalPossibleXp) *
             100,
           100,
@@ -320,11 +850,11 @@ export function AppProvider({ children }) {
 
   const level = Math.max(
     1,
-    Math.floor(totalXp / 100) + 1,
+    Math.floor(lifetimeXp / 100) + 1,
   );
 
   const xpIntoLevel =
-    totalXp % 100;
+    lifetimeXp % 100;
 
   const levelProgress =
     xpIntoLevel;
@@ -348,22 +878,39 @@ export function AppProvider({ children }) {
     tasks,
     completedTasks,
     isTodayComplete,
-    totalXp,
+
+    /*
+     * Lifetime XP.
+     */
+    totalXp: lifetimeXp,
+
+    /*
+     * Today's XP.
+     */
+    todayXp,
+
     totalPossibleXp,
-    xpProgress,
+    xpProgress: todayXpProgress,
+
+    lifetimeXp,
+
     currentStreak,
     bestStreak,
+
     completedTaskCount,
     taskProgress,
+
     rank,
     nextRank,
+
     toggleTask,
+
     level,
     xpIntoLevel,
     levelProgress,
+
     todayKey,
 
-    // Shared application settings
     settings,
     updateSetting,
   };

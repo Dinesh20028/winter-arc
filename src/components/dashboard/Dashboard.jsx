@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  ArrowUpRight,
   BookOpen,
   Code2,
   Dumbbell,
@@ -54,7 +53,8 @@ function Dashboard({ user = { name: 'Dinesh' } }) {
   const {
     tasks,
     completedTasks,
-    totalXp,
+    todayXp,
+    lifetimeXp,
     completedTaskCount,
     taskProgress,
     currentStreak,
@@ -136,8 +136,8 @@ function Dashboard({ user = { name: 'Dinesh' } }) {
         'bg-cyan-500/15 text-cyan-100',
     },
     {
-      label: 'XP',
-      value: totalXp.toLocaleString(),
+      label: 'Lifetime XP',
+      value: lifetimeXp.toLocaleString(),
       detail: `Level ${level}`,
       icon: Zap,
       accent:
@@ -267,7 +267,7 @@ function Dashboard({ user = { name: 'Dinesh' } }) {
                     </span>
 
                     <span className="text-xs text-cyan-200">
-                      {totalXp} XP earned
+                      {todayXp} XP today
                     </span>
                   </div>
                 </div>
@@ -278,7 +278,7 @@ function Dashboard({ user = { name: 'Dinesh' } }) {
                 bestStreak={bestStreak}
                 rank={rank}
                 nextRank={nextRank}
-                xpEarnedToday={totalXp}
+                xpEarnedToday={todayXp}
                 level={level}
                 levelProgress={levelProgress}
               />

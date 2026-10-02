@@ -1,119 +1,17 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Crown,
   Flame,
   LockKeyhole,
   Medal,
   Plus,
+  RefreshCw,
   Sparkles,
   Trophy,
   Users,
   Zap,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-
-const leaderboardUsers = [
-  {
-    name: 'Maya Sharma',
-    global: 8,
-    friends: 4,
-    groups: 1,
-    streak: 26,
-    best: 38,
-    level: 'Elite',
-    xp: 2350,
-  },
-  {
-    name: 'Arjun Mehta',
-    global: 9,
-    friends: 1,
-    groups: 4,
-    streak: 22,
-    best: 31,
-    level: 'Diamond',
-    xp: 2210,
-  },
-  {
-    name: 'Priya Nair',
-    global: 10,
-    friends: 6,
-    groups: 3,
-    streak: 20,
-    best: 27,
-    level: 'Diamond',
-    xp: 2075,
-  },
-  {
-    name: 'Kabir Singh',
-    global: 11,
-    friends: 5,
-    groups: 7,
-    streak: 16,
-    best: 29,
-    level: 'Platinum',
-    xp: 1960,
-  },
-  {
-    name: 'Dinesh',
-    global: 12,
-    friends: 3,
-    groups: 2,
-    streak: 18,
-    best: 24,
-    level: 'Gold',
-    xp: 1840,
-  },
-  {
-    name: 'Ananya Rao',
-    global: 13,
-    friends: 2,
-    groups: 5,
-    streak: 14,
-    best: 21,
-    level: 'Gold',
-    xp: 1765,
-  },
-  {
-    name: 'Rohan Das',
-    global: 14,
-    friends: 8,
-    groups: 6,
-    streak: 12,
-    best: 19,
-    level: 'Silver',
-    xp: 1630,
-  },
-  {
-    name: 'Isha Kapoor',
-    global: 15,
-    friends: 7,
-    groups: 8,
-    streak: 10,
-    best: 18,
-    level: 'Silver',
-    xp: 1515,
-  },
-  {
-    name: 'Dev Patel',
-    global: 16,
-    friends: 9,
-    groups: 10,
-    streak: 8,
-    best: 15,
-    level: 'Bronze',
-    xp: 1380,
-  },
-  {
-    name: 'Neha Joshi',
-    global: 17,
-    friends: 10,
-    groups: 9,
-    streak: 6,
-    best: 12,
-    level: 'Bronze',
-    xp: 1240,
-  },
-];
+import { supabase } from '../../lib/supabase';
 
 const leaderboardTabs = [
   {
@@ -152,48 +50,177 @@ const levelStyles = {
     'border-fuchsia-400/25 bg-fuchsia-500/10 text-fuchsia-200',
 };
 
+function getInitials(name) {
+  if (!name) return '?';
+
+  return name
+    .split(' ')
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+}
+
 function Contest() {
   const [activeTab, setActiveTab] = useState('global');
   const [groupNotice, setGroupNotice] = useState(false);
+  const [leaderboardUsers, setLeaderboardUsers] =
+    useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] =
+    useState(false);
+  const [errorMessage, setErrorMessage] =
+    useState('');
 
   const {
     currentStreak,
     bestStreak,
     totalXp,
     rank,
+    settings,
   } = useApp();
 
-  const dynamicUsers = useMemo(() => {
-    return leaderboardUsers.map((user) => {
-      if (user.name !== 'Dinesh') {
-        return user;
-      }
+  const loadLeaderboard = async ({
+    showLoader = true,
+  } = {}) => {
+    if (showLoader) {
+      setLoading(true);
+    } else {
+      setRefreshing(true);
+    }
 
-      return {
-        ...user,
-        streak: currentStreak,
-        best: bestStreak,
-        level: rank,
-        xp: totalXp,
-      };
-    });
-  }, [currentStreak, bestStreak, totalXp, rank]);
+    setErrorMessage('');
+
+    const {
+      data,
+      error,
+    } = await supabase
+      .from('profiles')
+      .select(
+        'id, username, display_name, current_streak, best_streak, xp, rank',
+      )
+      .eq('show_global_leaderboard', true)
+      .order('xp', {
+        ascending: false,
+      });
+
+    if (error) {
+      console.error(
+        'Could not load leaderboard:',
+        error,
+      );
+
+      setErrorMessage(
+        'Could not load the leaderboard. Please try again.',
+      );
+      setLeaderboardUsers([]);
+    } else {
+      setLeaderboardUsers(data || []);
+    }
+
+    setLoading(false);
+    setRefreshing(false);
+  };
+
+  /*
+   * Load leaderboard when the page opens.
+   */
+  useEffect(() => {
+    loadLeaderboard();
+  }, []);
+
+  /*
+   * Subscribe to profile changes so the
+   * leaderboard can update in real time.
+   */
+  useEffect(() => {
+    const channel = supabase
+      .channel('winter-arc-leaderboard')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'profiles',
+        },
+        () => {
+          loadLeaderboard({
+            showLoader: false,
+          });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const rankedUsers = useMemo(() => {
-    return [...dynamicUsers].sort(
-      (first, second) =>
-        first[activeTab] - second[activeTab],
+    /*
+     * Global ranking is currently based on
+     * lifetime XP.
+     */
+    return leaderboardUsers.map(
+      (user, index) => ({
+        ...user,
+        position: index + 1,
+        name:
+          user.display_name ||
+          user.username ||
+          'Winter User',
+        streak: Number(
+          user.current_streak || 0,
+        ),
+        best: Number(
+          user.best_streak || 0,
+        ),
+        xp: Number(user.xp || 0),
+        level: user.rank || 'Bronze',
+      }),
     );
-  }, [dynamicUsers, activeTab]);
+  }, [leaderboardUsers]);
 
-  const currentUser = dynamicUsers.find(
-    (user) => user.name === 'Dinesh',
-  );
+ 
+
+  /*
+   * Find the logged-in user from the
+   * browser session without exposing email.
+   */
+  const [sessionUserId, setSessionUserId] =
+    useState(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadSessionUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (mounted) {
+        setSessionUserId(user?.id || null);
+      }
+    };
+
+    loadSessionUser();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const currentPosition =
     rankedUsers.findIndex(
-      (user) => user.name === 'Dinesh',
+      (user) =>
+        user.id === sessionUserId,
     ) + 1;
+
+  const currentUser =
+    rankedUsers.find(
+      (user) =>
+        user.id === sessionUserId,
+    );
 
   const summaryCards = [
     {
@@ -202,7 +229,10 @@ function Contest() {
         currentPosition > 0
           ? `#${currentPosition}`
           : '--',
-      detail: 'Live prototype ranking',
+      detail:
+        settings.showGlobalLeaderboard
+          ? 'Based on lifetime XP'
+          : 'Leaderboard visibility is off',
       icon: Trophy,
     },
     {
@@ -223,7 +253,7 @@ function Contest() {
     {
       label: 'Total XP',
       value: totalXp.toLocaleString(),
-      detail: 'XP earned today',
+      detail: 'Lifetime XP',
       icon: Sparkles,
     },
   ];
@@ -231,21 +261,48 @@ function Contest() {
   return (
     <main className="min-h-screen overflow-x-hidden bg-slate-950 px-4 py-6 text-slate-50 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
+
+        {/* Header */}
         <header className="mb-6">
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.3em] text-cyan-200/75">
-            Winter Arc 2026
-          </p>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.3em] text-cyan-200/75">
+                Winter Arc 2026
+              </p>
 
-          <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
-            Contest &amp; Leaderboard
-          </h1>
+              <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
+                Contest &amp; Leaderboard
+              </h1>
 
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300 sm:text-base">
-            Compete with friends, build your streak, and climb the
-            leaderboard.
-          </p>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300 sm:text-base">
+                Compete with friends, build your streak, and climb
+                the leaderboard.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                loadLeaderboard({
+                  showLoader: false,
+                })
+              }
+              disabled={refreshing}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-400/25 bg-cyan-500/10 px-4 py-2.5 text-sm font-medium text-cyan-100 transition-all hover:border-cyan-300/50 hover:bg-cyan-500/15 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCw
+                className={`h-4 w-4 ${
+                  refreshing
+                    ? 'animate-spin'
+                    : ''
+                }`}
+              />
+              Refresh
+            </button>
+          </div>
         </header>
 
+        {/* Summary cards */}
         <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {summaryCards.map(
             ({
@@ -281,7 +338,10 @@ function Contest() {
         </section>
 
         <section className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+
+          {/* Leaderboard */}
           <article className="min-w-0 rounded-3xl border border-slate-800 bg-slate-900/80 p-4 shadow-[0_20px_50px_rgba(15,23,42,0.38)] backdrop-blur-sm sm:p-5">
+
             <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-400">
@@ -295,12 +355,20 @@ function Contest() {
 
               <div className="flex max-w-full gap-1 overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/70 p-1">
                 {leaderboardTabs.map(
-                  ({ label, key, icon: Icon }) => (
+                  ({
+                    label,
+                    key,
+                    icon: Icon,
+                  }) => (
                     <button
                       key={key}
                       type="button"
-                      onClick={() => setActiveTab(key)}
-                      aria-pressed={activeTab === key}
+                      onClick={() =>
+                        setActiveTab(key)
+                      }
+                      aria-pressed={
+                        activeTab === key
+                      }
                       className={`inline-flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-colors duration-200 sm:text-sm ${
                         activeTab === key
                           ? 'border border-cyan-400/30 bg-cyan-500/10 text-cyan-100'
@@ -315,153 +383,227 @@ function Contest() {
               </div>
             </div>
 
-            <div className="mb-3 hidden grid-cols-[42px_minmax(120px,1fr)_repeat(4,minmax(70px,0.65fr))] gap-3 px-4 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 sm:grid">
-              <span>Rank</span>
-              <span>Player</span>
-              <span className="text-center">
-                Streak
-              </span>
-              <span className="text-center">
-                Best
-              </span>
-              <span className="text-center">
-                Level
-              </span>
-              <span className="text-right">
-                XP
-              </span>
-            </div>
+            {activeTab !== 'global' ? (
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-8 text-center">
+                <Users className="mx-auto h-10 w-10 text-slate-500" />
 
-            <div className="space-y-2">
-              {rankedUsers.map((user) => {
-                const isCurrentUser =
-                  user.name === 'Dinesh';
+                <h3 className="mt-4 text-lg font-semibold text-white">
+                  {activeTab === 'friends'
+                    ? 'Friends leaderboard'
+                    : 'Private groups'}
+                </h3>
 
-                const position = user[activeTab];
+                <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-400">
+                  {activeTab === 'friends'
+                    ? 'Friends-only rankings will be connected after the friend system is added.'
+                    : 'Private group rankings will be connected when group creation and invitations are added.'}
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* Desktop headings */}
+                <div className="mb-3 hidden grid-cols-[42px_minmax(120px,1fr)_repeat(4,minmax(70px,0.65fr))] gap-3 px-4 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 sm:grid">
+                  <span>Rank</span>
+                  <span>Player</span>
+                  <span className="text-center">
+                    Streak
+                  </span>
+                  <span className="text-center">
+                    Best
+                  </span>
+                  <span className="text-center">
+                    Level
+                  </span>
+                  <span className="text-right">
+                    XP
+                  </span>
+                </div>
 
-                return (
-                  <div
-                    key={user.name}
-                    className={`grid grid-cols-[38px_minmax(0,1fr)] items-center gap-x-3 gap-y-3 rounded-2xl border p-3 transition-all duration-200 sm:grid-cols-[42px_minmax(120px,1fr)_repeat(4,minmax(70px,0.65fr))] sm:gap-3 sm:px-4 ${
-                      isCurrentUser
-                        ? 'border-cyan-400/35 bg-cyan-500/[0.09] shadow-[0_0_28px_rgba(34,211,238,0.08)]'
-                        : 'border-slate-800 bg-slate-950/55 hover:border-slate-700 hover:bg-slate-950/85'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      {position <= 3 ? (
-                        <Medal
-                          className={`h-4 w-4 ${
-                            position === 1
-                              ? 'text-amber-300'
-                              : position === 2
-                                ? 'text-slate-300'
-                                : 'text-orange-300'
-                          }`}
-                        />
-                      ) : (
-                        <span className="w-4 text-center text-sm font-semibold text-slate-400">
-                          {position}
-                        </span>
-                      )}
-                    </div>
+                {loading ? (
+                  <div className="space-y-2">
+                    {Array.from({
+                      length: 5,
+                    }).map((_, index) => (
+                      <div
+                        key={index}
+                        className="h-16 animate-pulse rounded-2xl border border-slate-800 bg-slate-950/60"
+                      />
+                    ))}
+                  </div>
+                ) : errorMessage ? (
+                  <div className="rounded-2xl border border-red-400/20 bg-red-500/5 p-8 text-center">
+                    <p className="text-sm text-red-200">
+                      {errorMessage}
+                    </p>
 
-                    <div className="flex min-w-0 items-center gap-3">
-                      <span
-                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border text-xs font-bold ${
-                          isCurrentUser
-                            ? 'border-cyan-300/40 bg-cyan-400/15 text-cyan-100'
-                            : 'border-slate-700 bg-slate-800 text-slate-300'
-                        }`}
-                      >
-                        {user.name
-                          .split(' ')
-                          .map((part) => part[0])
-                          .join('')
-                          .slice(0, 2)}
-                      </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        loadLeaderboard()
+                      }
+                      className="mt-4 rounded-xl border border-cyan-400/25 bg-cyan-500/10 px-4 py-2 text-sm font-medium text-cyan-100"
+                    >
+                      Try again
+                    </button>
+                  </div>
+                ) : rankedUsers.length === 0 ? (
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-8 text-center">
+                    <Trophy className="mx-auto h-10 w-10 text-slate-500" />
 
-                      <div className="min-w-0">
-                        <p
-                          className={`truncate text-sm font-semibold ${
+                    <h3 className="mt-4 text-lg font-semibold text-white">
+                      No leaderboard members yet
+                    </h3>
+
+                    <p className="mt-2 text-sm text-slate-400">
+                      Turn on global leaderboard visibility in
+                      Settings to appear here.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {rankedUsers.map((user) => {
+                      const isCurrentUser =
+                        user.id ===
+                        sessionUserId;
+
+                      const position =
+                        user.position;
+
+                      return (
+                        <div
+                          key={user.id}
+                          className={`grid grid-cols-[38px_minmax(0,1fr)] items-center gap-x-3 gap-y-3 rounded-2xl border p-3 transition-all duration-200 sm:grid-cols-[42px_minmax(120px,1fr)_repeat(4,minmax(70px,0.65fr))] sm:gap-3 sm:px-4 ${
                             isCurrentUser
-                              ? 'text-cyan-50'
-                              : 'text-slate-100'
+                              ? 'border-cyan-400/35 bg-cyan-500/[0.09] shadow-[0_0_28px_rgba(34,211,238,0.08)]'
+                              : 'border-slate-800 bg-slate-950/55 hover:border-slate-700 hover:bg-slate-950/85'
                           }`}
                         >
-                          {user.name}
+                          {/* Position */}
+                          <div className="flex items-center gap-2">
+                            {position <= 3 ? (
+                              <Medal
+                                className={`h-4 w-4 ${
+                                  position === 1
+                                    ? 'text-amber-300'
+                                    : position === 2
+                                      ? 'text-slate-300'
+                                      : 'text-orange-300'
+                                }`}
+                              />
+                            ) : (
+                              <span className="w-4 text-center text-sm font-semibold text-slate-400">
+                                {position}
+                              </span>
+                            )}
+                          </div>
 
-                          {isCurrentUser && (
-                            <span className="ml-2 text-[10px] font-medium uppercase tracking-wide text-cyan-300">
-                              You
+                          {/* Player */}
+                          <div className="flex min-w-0 items-center gap-3">
+                            <span
+                              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border text-xs font-bold ${
+                                isCurrentUser
+                                  ? 'border-cyan-300/40 bg-cyan-400/15 text-cyan-100'
+                                  : 'border-slate-700 bg-slate-800 text-slate-300'
+                              }`}
+                            >
+                              {getInitials(
+                                user.name,
+                              )}
                             </span>
-                          )}
-                        </p>
 
-                        <p className="text-[10px] text-slate-500 sm:hidden">
-                          Rank #{position}
-                        </p>
-                      </div>
-                    </div>
+                            <div className="min-w-0">
+                              <p
+                                className={`truncate text-sm font-semibold ${
+                                  isCurrentUser
+                                    ? 'text-cyan-50'
+                                    : 'text-slate-100'
+                                }`}
+                              >
+                                {user.name}
 
-                    <div className="col-span-2 grid grid-cols-2 gap-2 sm:col-span-1 sm:block sm:text-center">
-                      <span className="text-[10px] uppercase tracking-wide text-slate-500 sm:hidden">
-                        Current streak
-                      </span>
+                                {isCurrentUser && (
+                                  <span className="ml-2 text-[10px] font-medium uppercase tracking-wide text-cyan-300">
+                                    You
+                                  </span>
+                                )}
+                              </p>
 
-                      <span className="flex items-center gap-1.5 text-xs font-medium text-slate-200 sm:justify-center">
-                        <Flame className="h-3.5 w-3.5 text-orange-300" />
-                        {user.streak} days
-                      </span>
-                    </div>
+                              <p className="text-[10px] text-slate-500 sm:hidden">
+                                Rank #{position}
+                              </p>
+                            </div>
+                          </div>
 
-                    <div className="col-span-2 grid grid-cols-2 gap-2 sm:col-span-1 sm:block sm:text-center">
-                      <span className="text-[10px] uppercase tracking-wide text-slate-500 sm:hidden">
-                        Best streak
-                      </span>
+                          {/* Current streak */}
+                          <div className="col-span-2 grid grid-cols-2 gap-2 sm:col-span-1 sm:block sm:text-center">
+                            <span className="text-[10px] uppercase tracking-wide text-slate-500 sm:hidden">
+                              Current streak
+                            </span>
 
-                      <span className="text-xs font-medium text-slate-200">
-                        {user.best} days
-                      </span>
-                    </div>
+                            <span className="flex items-center gap-1.5 text-xs font-medium text-slate-200 sm:justify-center">
+                              <Flame className="h-3.5 w-3.5 text-orange-300" />
+                              {user.streak} days
+                            </span>
+                          </div>
 
-                    <div className="col-span-2 grid grid-cols-2 items-center gap-2 sm:col-span-1 sm:block">
-                      <span className="text-[10px] uppercase tracking-wide text-slate-500 sm:hidden">
-                        Rank level
-                      </span>
+                          {/* Best streak */}
+                          <div className="col-span-2 grid grid-cols-2 gap-2 sm:col-span-1 sm:block sm:text-center">
+                            <span className="text-[10px] uppercase tracking-wide text-slate-500 sm:hidden">
+                              Best streak
+                            </span>
 
-                      <span
-                        className={`inline-flex w-fit rounded-full border px-2 py-1 text-[10px] font-semibold ${
-                          levelStyles[user.level] ||
-                          levelStyles.Bronze
-                        }`}
-                      >
-                        {user.level}
-                      </span>
-                    </div>
+                            <span className="text-xs font-medium text-slate-200">
+                              {user.best} days
+                            </span>
+                          </div>
 
-                    <div className="col-span-2 flex items-center justify-between border-t border-slate-800/70 pt-2 sm:col-span-1 sm:justify-end sm:border-0 sm:pt-0">
-                      <span className="text-[10px] uppercase tracking-wide text-slate-500 sm:hidden">
-                        XP
-                      </span>
+                          {/* Rank */}
+                          <div className="col-span-2 grid grid-cols-2 items-center gap-2 sm:col-span-1 sm:block">
+                            <span className="text-[10px] uppercase tracking-wide text-slate-500 sm:hidden">
+                              Rank level
+                            </span>
 
-                      <span
-                        className={`text-sm font-bold tabular-nums ${
-                          isCurrentUser
-                            ? 'text-cyan-200'
-                            : 'text-white'
-                        }`}
-                      >
-                        {user.xp.toLocaleString()}
-                      </span>
-                    </div>
+                            <span
+                              className={`inline-flex w-fit rounded-full border px-2 py-1 text-[10px] font-semibold ${
+                                levelStyles[
+                                  user.level
+                                ] ||
+                                levelStyles.Bronze
+                              }`}
+                            >
+                              {user.level}
+                            </span>
+                          </div>
+
+                          {/* XP */}
+                          <div className="col-span-2 flex items-center justify-between border-t border-slate-800/70 pt-2 sm:col-span-1 sm:justify-end sm:border-0 sm:pt-0">
+                            <span className="text-[10px] uppercase tracking-wide text-slate-500 sm:hidden">
+                              XP
+                            </span>
+
+                            <span
+                              className={`text-sm font-bold tabular-nums ${
+                                isCurrentUser
+                                  ? 'text-cyan-200'
+                                  : 'text-white'
+                              }`}
+                            >
+                              {user.xp.toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              })}
-            </div>
+                )}
+              </>
+            )}
           </article>
 
+          {/* Sidebar */}
           <aside className="space-y-5">
+
+            {/* Current position */}
             <article className="rounded-3xl border border-cyan-400/25 bg-cyan-500/[0.07] p-5 shadow-[0_18px_45px_rgba(8,145,178,0.08)] backdrop-blur-sm">
               <div className="mb-4 flex items-center justify-between">
                 <span className="flex h-10 w-10 items-center justify-center rounded-2xl border border-cyan-300/30 bg-cyan-400/10 text-cyan-100">
@@ -496,7 +638,8 @@ function Contest() {
                   </span>
 
                   <span className="font-semibold text-white">
-                    Dinesh
+                    {currentUser?.name ||
+                      'You'}
                   </span>
                 </div>
 
@@ -542,6 +685,7 @@ function Contest() {
               </div>
             </article>
 
+            {/* Private groups */}
             <article className="rounded-3xl border border-slate-800 bg-slate-900/80 p-5 shadow-[0_18px_40px_rgba(15,23,42,0.35)] backdrop-blur-sm">
               <div className="mb-3 flex items-center gap-3">
                 <span className="flex h-10 w-10 items-center justify-center rounded-2xl border border-cyan-400/25 bg-cyan-500/10 text-cyan-200">
@@ -566,7 +710,9 @@ function Contest() {
 
               <button
                 type="button"
-                onClick={() => setGroupNotice(true)}
+                onClick={() =>
+                  setGroupNotice(true)
+                }
                 className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-cyan-400/30 bg-cyan-500/10 px-4 py-3 text-sm font-semibold text-cyan-100 transition-all duration-200 hover:border-cyan-300/60 hover:bg-cyan-500/15"
               >
                 <Plus className="h-4 w-4" />
@@ -581,9 +727,17 @@ function Contest() {
               )}
             </article>
 
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/60 px-4 py-3 text-xs leading-5 text-slate-400">
-              Other players currently use prototype data. Your
-              Dinesh profile uses live Winter Arc progress.
+            {/* Live status */}
+            <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/5 px-4 py-3 text-xs leading-5 text-emerald-100/80">
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
+                Live leaderboard
+              </div>
+
+              <p className="mt-1 text-slate-400">
+                Rankings refresh automatically when profile progress
+                changes.
+              </p>
             </div>
           </aside>
         </section>

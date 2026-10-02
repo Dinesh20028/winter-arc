@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   Bell,
   CalendarDays,
+  CheckCircle2,
   ChevronDown,
   CircleUserRound,
   Command,
@@ -15,8 +16,10 @@ import {
   SunMedium,
   Trophy,
   UserRound,
+  X,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { supabase } from '../../lib/supabase';
 
 const SETTINGS_KEY = 'winterArcSettings';
 
@@ -154,10 +157,160 @@ function SectionHeader({ icon: Icon, eyebrow, title }) {
   );
 }
 
-function Settings() {
+function PasswordModal({ onClose, onMessage }) {
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] =
+    useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleChangePassword = async (event) => {
+    event.preventDefault();
+
+    setError('');
+
+    if (newPassword.length < 6) {
+      setError(
+        'Password must contain at least 6 characters.',
+      );
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+
+    setLoading(true);
+
+    const { error: updateError } =
+      await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+    setLoading(false);
+
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+
+    onClose();
+    onMessage('Password changed successfully');
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4 backdrop-blur-md">
+      <div className="w-full max-w-md rounded-2xl border border-slate-700/80 bg-slate-900 p-6 shadow-[0_25px_80px_rgba(0,0,0,0.5)]">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-cyan-200/70">
+              Account security
+            </p>
+
+            <h2 className="mt-2 text-xl font-semibold text-white">
+              Change Password
+            </h2>
+
+            <p className="mt-1 text-sm text-slate-400">
+              Choose a new password for your Winter Arc
+              account.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-800 hover:text-white"
+            aria-label="Close"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <form
+          onSubmit={handleChangePassword}
+          className="mt-6 space-y-4"
+        >
+          <div>
+            <label
+              htmlFor="new-password"
+              className="mb-2 block text-xs font-semibold text-slate-300"
+            >
+              New Password
+            </label>
+
+            <input
+              id="new-password"
+              type="password"
+              value={newPassword}
+              onChange={(event) =>
+                setNewPassword(event.target.value)
+              }
+              placeholder="Enter new password"
+              autoComplete="new-password"
+              className="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-400/50"
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="confirm-password"
+              className="mb-2 block text-xs font-semibold text-slate-300"
+            >
+              Confirm Password
+            </label>
+
+            <input
+              id="confirm-password"
+              type="password"
+              value={confirmPassword}
+              onChange={(event) =>
+                setConfirmPassword(event.target.value)
+              }
+              placeholder="Confirm new password"
+              autoComplete="new-password"
+              className="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-400/50"
+            />
+          </div>
+
+          {error && (
+            <div className="rounded-xl border border-rose-400/20 bg-rose-400/[0.06] px-4 py-3 text-xs leading-5 text-rose-200">
+              {error}
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 rounded-xl border border-slate-700 bg-slate-950/60 px-4 py-3 text-sm font-semibold text-slate-300 transition hover:bg-slate-800"
+            >
+              Cancel
+            </button>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex-1 rounded-xl border border-cyan-300/30 bg-cyan-400/15 px-4 py-3 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/25 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {loading
+                ? 'Updating...'
+                : 'Update Password'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function Settings({ onNavigate }) {
   const { settings, updateSetting } = useApp();
 
   const [message, setMessage] = useState('');
+  const [showPasswordModal, setShowPasswordModal] =
+    useState(false);
 
   useEffect(() => {
     if (!settings) {
@@ -201,364 +354,461 @@ function Settings() {
     window.settingsMessageTimer =
       window.setTimeout(() => {
         setMessage('');
-      }, 1800);
+      }, 2200);
   };
 
-  return (
-    <main
-      className={`min-h-screen bg-slate-950 px-4 py-6 text-slate-50 sm:px-6 sm:py-8 lg:px-8 ${
-        settings.compactMode ? 'text-[95%]' : ''
-      }`}
-    >
-      <div className="mx-auto max-w-6xl">
-        <header className="mb-8">
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.3em] text-cyan-200/75">
-            Winter Arc 2026
+  const handleSignOut = async () => {
+    const confirmed = window.confirm(
+      'Are you sure you want to sign out?',
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const { error } =
+      await supabase.auth.signOut();
+
+    if (error) {
+      showActionMessage(
+        `Sign out failed: ${error.message}`,
+      );
+    }
+  };
+
+  if (!settings) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-100">
+        <div className="text-center">
+          <div className="mx-auto mb-4 h-9 w-9 animate-spin rounded-full border-2 border-cyan-400/20 border-t-cyan-400" />
+          <p className="text-sm text-slate-400">
+            Loading settings...
           </p>
-
-          <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
-            Settings
-          </h1>
-
-          <p className="mt-2 text-sm text-slate-400 sm:text-base">
-            Customize your Winter Arc experience.
-          </p>
-
-          {message && (
-            <div className="mt-4 inline-flex rounded-lg border border-cyan-400/20 bg-cyan-400/[0.08] px-3 py-2 text-xs font-semibold text-cyan-100">
-              ✓ {message}
-            </div>
-          )}
-        </header>
-
-        <div className="grid gap-6 lg:grid-cols-2">
-          <GlassCard className="p-5 sm:p-6">
-            <SectionHeader
-              icon={Palette}
-              eyebrow="Personalize"
-              title="Appearance"
-            />
-
-            <SettingRow
-              label="Theme"
-              description="Keep your workspace focused after dark."
-              value={settings.theme}
-              icon={SunMedium}
-              control="select"
-              options={[
-                'Dark',
-                'Midnight',
-                'Dim',
-              ]}
-              onChange={(value) =>
-                changeSetting('theme', value)
-              }
-            />
-
-            <SettingRow
-              label="Accent Glow"
-              description="Set the highlight color across your arc."
-              value={settings.accentGlow}
-              icon={Sparkles}
-              control="select"
-              options={[
-                'Winter Blue',
-                'Ice Purple',
-                'Aurora Green',
-              ]}
-              onChange={(value) =>
-                changeSetting(
-                  'accentGlow',
-                  value,
-                )
-              }
-            />
-
-            <SettingRow
-              label="Compact Mode"
-              description="Use tighter spacing across the dashboard."
-              icon={Command}
-              control="toggle"
-              enabled={settings.compactMode}
-              onToggle={() =>
-                changeSetting(
-                  'compactMode',
-                  !settings.compactMode,
-                )
-              }
-            />
-          </GlassCard>
-
-          <GlassCard className="p-5 sm:p-6">
-            <SectionHeader
-              icon={Bell}
-              eyebrow="Stay in rhythm"
-              title="Notifications"
-            />
-
-            <SettingRow
-              label="Daily Mission Reminder"
-              description="A nudge when your daily missions are waiting."
-              control="toggle"
-              enabled={
-                settings.dailyMissionReminder
-              }
-              onToggle={() =>
-                changeSetting(
-                  'dailyMissionReminder',
-                  !settings.dailyMissionReminder,
-                )
-              }
-            />
-
-            <SettingRow
-              label="Streak Reminder"
-              description="Protect your momentum before the day ends."
-              control="toggle"
-              enabled={settings.streakReminder}
-              onToggle={() =>
-                changeSetting(
-                  'streakReminder',
-                  !settings.streakReminder,
-                )
-              }
-            />
-
-            <SettingRow
-              label="Achievement Notifications"
-              description="Celebrate each milestone as it unlocks."
-              control="toggle"
-              enabled={
-                settings.achievementNotifications
-              }
-              onToggle={() =>
-                changeSetting(
-                  'achievementNotifications',
-                  !settings.achievementNotifications,
-                )
-              }
-            />
-
-            <SettingRow
-              label="Leaderboard Updates"
-              description="See when your standing changes."
-              control="toggle"
-              enabled={
-                settings.leaderboardUpdates
-              }
-              onToggle={() =>
-                changeSetting(
-                  'leaderboardUpdates',
-                  !settings.leaderboardUpdates,
-                )
-              }
-            />
-          </GlassCard>
-
-          <GlassCard className="p-5 sm:p-6">
-            <SectionHeader
-              icon={Trophy}
-              eyebrow="Your mission"
-              title="Challenge Settings"
-            />
-
-            <div className="space-y-4">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-sm font-semibold text-slate-100">
-                    Challenge
-                  </p>
-
-                  <p className="mt-1 text-xs text-slate-500">
-                    Your active seasonal challenge.
-                  </p>
-                </div>
-
-                <span className="text-right text-xs font-semibold text-cyan-100">
-                  Winter Arc 2026
-                </span>
-              </div>
-
-              <div className="grid gap-3 border-t border-slate-800/80 pt-4 sm:grid-cols-2">
-                <div className="flex items-center gap-3">
-                  <CalendarDays className="h-4 w-4 text-cyan-200" />
-
-                  <div>
-                    <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">
-                      Start Date
-                    </p>
-
-                    <p className="mt-1 text-xs font-semibold text-slate-200">
-                      October 1, 2026
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <CalendarDays className="h-4 w-4 text-blue-200" />
-
-                  <div>
-                    <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">
-                      End Date
-                    </p>
-
-                    <p className="mt-1 text-xs font-semibold text-slate-200">
-                      December 31, 2026
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="border-t border-slate-800/80 pt-4">
-                <SettingRow
-                  label="Streak Protection"
-                  description="Keep one missed day from breaking your run."
-                  enabled={
-                    settings.streakProtection
-                  }
-                  control="toggle"
-                  onToggle={() =>
-                    changeSetting(
-                      'streakProtection',
-                      !settings.streakProtection,
-                    )
-                  }
-                />
-              </div>
-            </div>
-          </GlassCard>
-
-          <GlassCard className="p-5 sm:p-6">
-            <SectionHeader
-              icon={ShieldCheck}
-              eyebrow="Your boundaries"
-              title="Privacy"
-            />
-
-            <SettingRow
-              label="Profile Visibility"
-              description="Choose who can view your Winter Arc profile."
-              value={settings.profileVisibility}
-              icon={Eye}
-              control="select"
-              options={[
-                'Everyone',
-                'Friends',
-                'Private',
-              ]}
-              onChange={(value) =>
-                changeSetting(
-                  'profileVisibility',
-                  value,
-                )
-              }
-            />
-
-            <SettingRow
-              label="Show on Global Leaderboard"
-              description="Let your progress appear in the global rankings."
-              control="toggle"
-              enabled={
-                settings.showGlobalLeaderboard
-              }
-              onToggle={() =>
-                changeSetting(
-                  'showGlobalLeaderboard',
-                  !settings.showGlobalLeaderboard,
-                )
-              }
-            />
-
-            <SettingRow
-              label="Show Current Streak"
-              description="Make your consistency visible to friends."
-              control="toggle"
-              enabled={
-                settings.showCurrentStreak
-              }
-              onToggle={() =>
-                changeSetting(
-                  'showCurrentStreak',
-                  !settings.showCurrentStreak,
-                )
-              }
-            />
-          </GlassCard>
         </div>
+      </main>
+    );
+  }
 
-        <GlassCard className="mt-6 p-5 sm:p-6">
-          <SectionHeader
-            icon={CircleUserRound}
-            eyebrow="Account access"
-            title="Account"
-          />
+  return (
+    <>
+      <main
+        className={`min-h-screen bg-slate-950 px-4 py-6 text-slate-50 sm:px-6 sm:py-8 lg:px-8 ${
+          settings.compactMode ? 'text-[95%]' : ''
+        }`}
+      >
+        <div className="mx-auto max-w-6xl">
+          <header className="mb-8">
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.3em] text-cyan-200/75">
+              Winter Arc 2026
+            </p>
 
-          <div className="grid gap-3 sm:grid-cols-3">
-            <button
-              type="button"
-              onClick={() =>
-                showActionMessage(
-                  'Profile settings will connect here.',
-                )
-              }
-              className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-950/45 p-3 text-left transition hover:border-cyan-400/30 hover:bg-slate-800/50"
-            >
-              <UserRound className="h-4 w-4 text-cyan-200" />
+            <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
+              Settings
+            </h1>
 
-              <span className="text-sm font-semibold text-slate-200">
-                Profile
-              </span>
-            </button>
+            <p className="mt-2 text-sm text-slate-400 sm:text-base">
+              Customize your Winter Arc experience.
+            </p>
 
-            <button
-              type="button"
-              onClick={() =>
-                showActionMessage(
-                  'Password management will connect with Supabase Auth.',
-                )
-              }
-              className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-950/45 p-3 text-left transition hover:border-cyan-400/30 hover:bg-slate-800/50"
-            >
-              <KeyRound className="h-4 w-4 text-cyan-200" />
+            {message && (
+              <div className="mt-4 inline-flex items-center gap-2 rounded-lg border border-cyan-400/20 bg-cyan-400/[0.08] px-3 py-2 text-xs font-semibold text-cyan-100">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                {message}
+              </div>
+            )}
+          </header>
 
-              <span className="text-sm font-semibold text-slate-200">
-                Change Password
-              </span>
-            </button>
+          <div className="grid gap-6 lg:grid-cols-2">
+            <GlassCard className="p-5 sm:p-6">
+              <SectionHeader
+                icon={Palette}
+                eyebrow="Personalize"
+                title="Appearance"
+              />
 
-            <button
-              type="button"
-              onClick={() =>
-                showActionMessage(
-                  'Sign out will be connected with authentication.',
-                )
-              }
-              className="flex items-center gap-3 rounded-xl border border-rose-400/15 bg-rose-400/[0.04] p-3 text-left transition hover:border-rose-300/35 hover:bg-rose-400/[0.08]"
-            >
-              <LogOut className="h-4 w-4 text-rose-200" />
+              <SettingRow
+                label="Theme"
+                description="Keep your workspace focused after dark."
+                value={settings.theme}
+                icon={SunMedium}
+                control="select"
+                options={[
+                  'Dark',
+                  'Midnight',
+                  'Dim',
+                ]}
+                onChange={(value) =>
+                  changeSetting('theme', value)
+                }
+              />
 
-              <span className="text-sm font-semibold text-rose-100">
-                Sign Out
-              </span>
-            </button>
+              <SettingRow
+                label="Accent Glow"
+                description="Set the highlight color across your arc."
+                value={settings.accentGlow}
+                icon={Sparkles}
+                control="select"
+                options={[
+                  'Winter Blue',
+                  'Ice Purple',
+                  'Aurora Green',
+                ]}
+                onChange={(value) =>
+                  changeSetting(
+                    'accentGlow',
+                    value,
+                  )
+                }
+              />
+
+              <SettingRow
+                label="Compact Mode"
+                description="Use tighter spacing across the dashboard."
+                icon={Command}
+                control="toggle"
+                enabled={settings.compactMode}
+                onToggle={() =>
+                  changeSetting(
+                    'compactMode',
+                    !settings.compactMode,
+                  )
+                }
+              />
+            </GlassCard>
+
+            <GlassCard className="p-5 sm:p-6">
+              <SectionHeader
+                icon={Bell}
+                eyebrow="Stay in rhythm"
+                title="Notifications"
+              />
+
+              <SettingRow
+                label="Daily Mission Reminder"
+                description="A nudge when your daily missions are waiting."
+                control="toggle"
+                enabled={
+                  settings.dailyMissionReminder
+                }
+                onToggle={() =>
+                  changeSetting(
+                    'dailyMissionReminder',
+                    !settings.dailyMissionReminder,
+                  )
+                }
+              />
+
+              <SettingRow
+                label="Streak Reminder"
+                description="Protect your momentum before the day ends."
+                control="toggle"
+                enabled={settings.streakReminder}
+                onToggle={() =>
+                  changeSetting(
+                    'streakReminder',
+                    !settings.streakReminder,
+                  )
+                }
+              />
+
+              <SettingRow
+                label="Achievement Notifications"
+                description="Celebrate each milestone as it unlocks."
+                control="toggle"
+                enabled={
+                  settings.achievementNotifications
+                }
+                onToggle={() =>
+                  changeSetting(
+                    'achievementNotifications',
+                    !settings.achievementNotifications,
+                  )
+                }
+              />
+
+              <SettingRow
+                label="Leaderboard Updates"
+                description="See when your standing changes."
+                control="toggle"
+                enabled={
+                  settings.leaderboardUpdates
+                }
+                onToggle={() =>
+                  changeSetting(
+                    'leaderboardUpdates',
+                    !settings.leaderboardUpdates,
+                  )
+                }
+              />
+            </GlassCard>
+
+            <GlassCard className="p-5 sm:p-6">
+              <SectionHeader
+                icon={Trophy}
+                eyebrow="Your mission"
+                title="Challenge Settings"
+              />
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-100">
+                      Challenge
+                    </p>
+
+                    <p className="mt-1 text-xs text-slate-500">
+                      Your active seasonal challenge.
+                    </p>
+                  </div>
+
+                  <span className="text-right text-xs font-semibold text-cyan-100">
+                    Winter Arc 2026
+                  </span>
+                </div>
+
+                <div className="grid gap-3 border-t border-slate-800/80 pt-4 sm:grid-cols-2">
+                  <div className="flex items-center gap-3">
+                    <CalendarDays className="h-4 w-4 text-cyan-200" />
+
+                    <div>
+                      <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                        Start Date
+                      </p>
+
+                      <p className="mt-1 text-xs font-semibold text-slate-200">
+                        October 1, 2026
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <CalendarDays className="h-4 w-4 text-blue-200" />
+
+                    <div>
+                      <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                        End Date
+                      </p>
+
+                      <p className="mt-1 text-xs font-semibold text-slate-200">
+                        December 31, 2026
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-800/80 pt-4">
+                  <SettingRow
+                    label="Streak Protection"
+                    description="Keep one missed day from breaking your run."
+                    enabled={
+                      settings.streakProtection
+                    }
+                    control="toggle"
+                    onToggle={() =>
+                      changeSetting(
+                        'streakProtection',
+                        !settings.streakProtection,
+                      )
+                    }
+                  />
+                </div>
+              </div>
+            </GlassCard>
+
+            <GlassCard className="p-5 sm:p-6">
+              <SectionHeader
+                icon={ShieldCheck}
+                eyebrow="Your boundaries"
+                title="Privacy"
+              />
+
+              <SettingRow
+                label="Profile Visibility"
+                description="Choose who can view your Winter Arc profile."
+                value={settings.profileVisibility}
+                icon={Eye}
+                control="select"
+                options={[
+                  'Everyone',
+                  'Friends',
+                  'Private',
+                ]}
+                onChange={(value) =>
+                  changeSetting(
+                    'profileVisibility',
+                    value,
+                  )
+                }
+              />
+
+              <SettingRow
+                label="Show on Global Leaderboard"
+                description="Let your progress appear in the global rankings."
+                control="toggle"
+                enabled={
+                  settings.showGlobalLeaderboard
+                }
+                onToggle={() =>
+                  changeSetting(
+                    'showGlobalLeaderboard',
+                    !settings.showGlobalLeaderboard,
+                  )
+                }
+              />
+
+              <SettingRow
+                label="Show Current Streak"
+                description="Make your consistency visible to friends."
+                control="toggle"
+                enabled={
+                  settings.showCurrentStreak
+                }
+                onToggle={() =>
+                  changeSetting(
+                    'showCurrentStreak',
+                    !settings.showCurrentStreak,
+                  )
+                }
+              />
+            </GlassCard>
           </div>
-        </GlassCard>
 
-        <section className="relative mt-6 overflow-hidden rounded-2xl border border-cyan-400/20 bg-slate-900/70 p-6 text-center shadow-[0_20px_55px_rgba(8,47,73,0.16)] sm:p-8">
-          <div className="pointer-events-none absolute left-1/2 top-0 h-px w-2/3 -translate-x-1/2 bg-cyan-300/50 shadow-[0_0_18px_rgba(103,232,249,0.45)]" />
+          <GlassCard className="mt-6 p-5 sm:p-6">
+            <SectionHeader
+              icon={CircleUserRound}
+              eyebrow="Account access"
+              title="Account"
+            />
 
-          <LockKeyhole className="mx-auto h-5 w-5 text-cyan-200/80" />
+            <div className="grid gap-3 sm:grid-cols-3">
+				<div className="mb-4 rounded-xl border border-cyan-400/15 bg-cyan-400/[0.04] p-4">
+  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div>
+      <p className="text-sm font-semibold text-slate-100">
+        Test Notifications
+      </p>
 
-          <h2 className="mt-3 text-lg font-semibold text-white">
-            Winter Arc 2026
-          </h2>
+      <p className="mt-1 text-xs leading-5 text-slate-500">
+        Send a test browser notification to verify that
+        Winter Arc reminders are working.
+      </p>
+    </div>
 
-          <p className="mt-2 text-sm text-slate-400">
-            90 days. One mission. No excuses.
-          </p>
-        </section>
-      </div>
-    </main>
+    <button
+      type="button"
+      onClick={async () => {
+        if (!('Notification' in window)) {
+          showActionMessage(
+            'This browser does not support notifications.',
+          );
+          return;
+        }
+
+        if (Notification.permission === 'denied') {
+          showActionMessage(
+            'Notifications are blocked in browser settings.',
+          );
+          return;
+        }
+
+        let permission =
+          Notification.permission;
+
+        if (permission === 'default') {
+          permission =
+            await Notification.requestPermission();
+        }
+
+        if (permission !== 'granted') {
+          showActionMessage(
+            'Notification permission was not granted.',
+          );
+          return;
+        }
+
+        new Notification(
+          'Winter Arc — Test Notification 🔔',
+          {
+            body: 'Your Winter Arc notifications are working correctly!',
+            icon: '/vite.svg',
+          },
+        );
+
+        showActionMessage(
+          'Test notification sent',
+        );
+      }}
+      className="inline-flex shrink-0 items-center justify-center rounded-xl border border-cyan-300/25 bg-cyan-400/10 px-4 py-2.5 text-xs font-semibold text-cyan-100 transition hover:border-cyan-300/40 hover:bg-cyan-400/20"
+    >
+      Test Notification
+    </button>
+  </div>
+</div>
+              <button
+                type="button"
+                onClick={() => onNavigate('Profile')}
+                className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-950/45 p-3 text-left transition hover:border-cyan-400/30 hover:bg-slate-800/50"
+              >
+                <UserRound className="h-4 w-4 text-cyan-200" />
+
+                <span className="text-sm font-semibold text-slate-200">
+                  Profile
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setShowPasswordModal(true)
+                }
+                className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-950/45 p-3 text-left transition hover:border-cyan-400/30 hover:bg-slate-800/50"
+              >
+                <KeyRound className="h-4 w-4 text-cyan-200" />
+
+                <span className="text-sm font-semibold text-slate-200">
+                  Change Password
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="flex items-center gap-3 rounded-xl border border-rose-400/15 bg-rose-400/[0.04] p-3 text-left transition hover:border-rose-300/35 hover:bg-rose-400/[0.08]"
+              >
+                <LogOut className="h-4 w-4 text-rose-200" />
+
+                <span className="text-sm font-semibold text-rose-100">
+                  Sign Out
+                </span>
+              </button>
+            </div>
+          </GlassCard>
+
+          <section className="relative mt-6 overflow-hidden rounded-2xl border border-cyan-400/20 bg-slate-900/70 p-6 text-center shadow-[0_20px_55px_rgba(8,47,73,0.16)] sm:p-8">
+            <div className="pointer-events-none absolute left-1/2 top-0 h-px w-2/3 -translate-x-1/2 bg-cyan-300/50 shadow-[0_0_18px_rgba(103,232,249,0.45)]" />
+
+            <LockKeyhole className="mx-auto h-5 w-5 text-cyan-200/80" />
+
+            <h2 className="mt-3 text-lg font-semibold text-white">
+              Winter Arc 2026
+            </h2>
+
+            <p className="mt-2 text-sm text-slate-400">
+              90 days. One mission. No excuses.
+            </p>
+          </section>
+        </div>
+      </main>
+
+      {showPasswordModal && (
+        <PasswordModal
+          onClose={() =>
+            setShowPasswordModal(false)
+          }
+          onMessage={showActionMessage}
+        />
+      )}
+    </>
   );
 }
 

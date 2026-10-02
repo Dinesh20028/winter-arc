@@ -26,7 +26,7 @@ const categoryStyles = {
 function DailyTasks() {
   const {
     tasks,
-    totalXp,
+    todayXp,
     totalPossibleXp,
     completedTaskCount,
     taskProgress,
@@ -43,7 +43,7 @@ function DailyTasks() {
 
   const xpProgress =
     totalPossibleXp > 0
-      ? Math.round((totalXp / totalPossibleXp) * 100)
+      ? Math.round((todayXp / totalPossibleXp) * 100)
       : 0;
 
   return (
@@ -76,7 +76,7 @@ function DailyTasks() {
           >
             {isTodayComplete
               ? 'Daily mission complete ✓'
-              : 'Complete today\'s missions and build your streak.'}
+              : "Complete today's missions and build your streak."}
           </div>
         </header>
 
@@ -133,7 +133,7 @@ function DailyTasks() {
             </div>
 
             <div className="text-2xl font-semibold text-white">
-              {totalXp}
+              {todayXp}
             </div>
 
             <p className="mt-1 text-xs text-slate-500">
@@ -162,11 +162,11 @@ function DailyTasks() {
           <div className="rounded-2xl border border-slate-700/80 bg-slate-900/70 p-4">
             <div className="mb-2 flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-slate-400">
               <Zap className="h-3.5 w-3.5 text-cyan-300" />
-              XP earned
+              XP earned today
             </div>
 
             <div className="text-2xl font-semibold text-white">
-              {totalXp}
+              {todayXp}
               <span className="ml-1 text-sm text-slate-500">
                 / {totalPossibleXp}
               </span>

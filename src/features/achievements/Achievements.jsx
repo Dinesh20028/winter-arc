@@ -11,7 +11,6 @@ import {
   LockKeyhole,
   Medal,
   Mic2,
-  ShieldCheck,
   Sparkles,
   Star,
   Target,
@@ -19,7 +18,9 @@ import {
   Wallet,
   Zap,
 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { supabase } from '../../lib/supabase';
 
 const achievementsByCategory = [
   {
@@ -34,13 +35,13 @@ const achievementsByCategory = [
         reward: 50,
         icon: Target,
         requirement: 1,
-        type: 'streak',
+        type: 'completedDays',
       },
       {
         title: 'Week Warrior',
         description: 'Reach a 7-day streak',
         reward: 100,
-        icon: ShieldCheck,
+        icon: Medal,
         requirement: 7,
         type: 'streak',
       },
@@ -74,7 +75,7 @@ const achievementsByCategory = [
         reward: 1000,
         icon: Trophy,
         requirement: 90,
-        type: 'streak',
+        type: 'completedDays',
       },
     ],
   },
@@ -192,12 +193,6 @@ const toneStyles = {
     glow:
       'shadow-[0_0_26px_rgba(96,165,250,0.07)]',
   },
-  emerald: {
-    icon:
-      'border-emerald-400/20 bg-emerald-400/[0.08] text-emerald-200',
-    glow:
-      'shadow-[0_0_26px_rgba(52,211,153,0.07)]',
-  },
 };
 
 const categoryIconStyles = {
@@ -213,7 +208,10 @@ const categoryIconStyles = {
     'border-violet-400/20 bg-violet-400/10 text-violet-200',
 };
 
-function getAchievementState(achievement, stats) {
+function getAchievementState(
+  achievement,
+  stats,
+) {
   let current = 0;
 
   if (achievement.type === 'streak') {
@@ -224,12 +222,19 @@ function getAchievementState(achievement, stats) {
     current = stats.totalXp;
   }
 
-  if (achievement.category) {
-    current =
-      stats.categoryTaskCounts[achievement.category] || 0;
+  if (achievement.type === 'completedDays') {
+    current = stats.completedDays;
   }
 
-  const completed = current >= achievement.requirement;
+  if (achievement.category) {
+    current =
+      stats.categoryTaskCounts[
+        achievement.category
+      ] || 0;
+  }
+
+  const completed =
+    current >= achievement.requirement;
 
   const progress = Math.min(
     Math.round(
@@ -250,6 +255,13 @@ function getAchievementState(achievement, stats) {
       current,
       achievement.requirement,
     ).toLocaleString()} / ${achievement.requirement.toLocaleString()} XP`;
+  } else if (
+    achievement.type === 'completedDays'
+  ) {
+    progressLabel = `${Math.min(
+      current,
+      achievement.requirement,
+    )} / ${achievement.requirement} days`;
   } else {
     progressLabel = `${Math.min(
       current,
@@ -266,10 +278,14 @@ function getAchievementState(achievement, stats) {
         : 'locked',
     progress,
     progressLabel,
+    current,
   };
 }
 
-function AchievementCard({ achievement, tone }) {
+function AchievementCard({
+  achievement,
+  tone,
+}) {
   const {
     title,
     description,
@@ -281,8 +297,11 @@ function AchievementCard({ achievement, tone }) {
     color,
   } = achievement;
 
-  const unlocked = status === 'unlocked';
-  const inProgress = status === 'in-progress';
+  const unlocked =
+    status === 'unlocked';
+
+  const inProgress =
+    status === 'in-progress';
 
   const styles = toneStyles[tone];
 
@@ -375,7 +394,9 @@ function AchievementCard({ achievement, tone }) {
                   : 'text-slate-500'
             }
           >
-            {unlocked ? '100%' : `${progress}%`}
+            {unlocked
+              ? '100%'
+              : `${progress}%`}
           </span>
         </div>
 
@@ -416,65 +437,175 @@ function AchievementCard({ achievement, tone }) {
 
 function Achievements() {
   const {
-    tasks,
     currentStreak,
     bestStreak,
-    totalXp,
+    lifetimeXp,
   } = useApp();
 
-  const completedTasks = tasks.filter(
-    (task) => task.completed,
-  );
+  const [
+    dailyProgress,
+    setDailyProgress,
+  ] = useState([]);
 
-  const categoryTaskCounts = completedTasks.reduce(
-    (result, task) => {
-      result[task.category] =
-        (result[task.category] || 0) + 1;
+  const [loading, setLoading] =
+    useState(true);
 
-      return result;
-    },
-    {},
-  );
+  useEffect(() => {
+    let mounted = true;
+
+    const loadProgress = async () => {
+      setLoading(true);
+
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (
+        userError ||
+        !user
+      ) {
+        if (mounted) {
+          setDailyProgress([]);
+          setLoading(false);
+        }
+
+        return;
+      }
+
+      const { data, error } =
+        await supabase
+          .from('daily_progress')
+          .select(
+            'date, xp_earned, day_complete, tasks',
+          )
+          .gte('date', '2026-10-01')
+          .lte('date', '2026-12-31')
+          .order('date', {
+            ascending: true,
+          });
+
+      if (!mounted) {
+        return;
+      }
+
+      if (error) {
+        console.error(
+          'Could not load achievement progress:',
+          error,
+        );
+
+        setDailyProgress([]);
+      } else {
+        setDailyProgress(data || []);
+      }
+
+      setLoading(false);
+    };
+
+    loadProgress();
+
+    const channel = supabase
+      .channel('winter-arc-achievements')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'daily_progress',
+        },
+        () => {
+          loadProgress();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      mounted = false;
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const completedDays =
+    dailyProgress.filter(
+      (day) => day.day_complete === true,
+    ).length;
+
+  const categoryTaskCounts =
+    useMemo(() => {
+      const counts = {
+        Fitness: 0,
+        Coding: 0,
+        Study: 0,
+        English: 0,
+        Money: 0,
+      };
+
+      dailyProgress.forEach((day) => {
+        if (!Array.isArray(day.tasks)) {
+          return;
+        }
+
+        day.tasks.forEach((task) => {
+          if (
+            task.completed &&
+            counts[task.category] !==
+              undefined
+          ) {
+            counts[task.category] += 1;
+          }
+        });
+      });
+
+      return counts;
+    }, [dailyProgress]);
 
   const stats = {
     currentStreak,
     bestStreak,
-    totalXp,
+    totalXp: lifetimeXp,
+    completedDays,
     categoryTaskCounts,
   };
 
   const dynamicCategories =
-    achievementsByCategory.map((category) => ({
-      ...category,
-      achievements: category.achievements.map(
-        (achievement) =>
-          getAchievementState(
-            achievement,
-            stats,
+    achievementsByCategory.map(
+      (category) => ({
+        ...category,
+        achievements:
+          category.achievements.map(
+            (achievement) =>
+              getAchievementState(
+                achievement,
+                stats,
+              ),
           ),
-      ),
-    }));
+      }),
+    );
 
   const allAchievements =
     dynamicCategories.flatMap(
-      (category) => category.achievements,
+      (category) =>
+        category.achievements,
     );
 
   const unlockedAchievements =
     allAchievements.filter(
       (achievement) =>
-        achievement.status === 'unlocked',
+        achievement.status ===
+        'unlocked',
     ).length;
 
   const totalAchievements =
     allAchievements.length;
 
-  const challengeDay = Math.min(
-    Math.max(currentStreak, 1),
+  const nextStreakMilestones = [
+    7,
+    14,
+    30,
+    60,
     90,
-  );
-
-  const nextStreakMilestones = [30, 60, 90];
+  ];
 
   const nextMilestone =
     nextStreakMilestones.find(
@@ -482,17 +613,22 @@ function Achievements() {
         currentStreak < milestone,
     ) || 90;
 
-  const milestoneProgress = Math.min(
-    Math.round(
-      (currentStreak / nextMilestone) * 100,
-    ),
-    100,
-  );
+  const milestoneProgress =
+    Math.min(
+      Math.round(
+        (currentStreak /
+          nextMilestone) *
+          100,
+      ),
+      100,
+    );
 
-  const daysToMilestone = Math.max(
-    nextMilestone - currentStreak,
-    0,
-  );
+  const daysToMilestone =
+    Math.max(
+      nextMilestone -
+        currentStreak,
+      0,
+    );
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-6 text-slate-50 sm:px-6 sm:py-8 lg:px-8">
@@ -515,7 +651,7 @@ function Achievements() {
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2 rounded-full border border-slate-800 bg-slate-900/80 px-3 py-2 text-xs font-medium text-slate-300">
               <Trophy className="h-3.5 w-3.5 text-cyan-200" />
-              {challengeDay} / 90 Days Completed
+              {completedDays} / 90 Days Completed
             </div>
 
             <div className="flex items-center gap-2 rounded-full border border-emerald-400/15 bg-emerald-400/[0.06] px-3 py-2 text-[11px] font-medium text-emerald-200">
@@ -524,7 +660,9 @@ function Achievements() {
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-300" />
               </span>
 
-              Progress active
+              {loading
+                ? 'Syncing progress'
+                : 'Progress active'}
             </div>
           </div>
         </header>
@@ -537,7 +675,8 @@ function Achievements() {
             {
               label: 'Achievements Unlocked',
               value: unlockedAchievements,
-              detail: 'Keep earning your legacy',
+              detail:
+                'Keep earning your legacy',
               icon: Award,
               accent: 'text-cyan-200',
               iconBg:
@@ -546,7 +685,8 @@ function Achievements() {
             {
               label: 'Total Achievements',
               value: totalAchievements,
-              detail: 'Across 3 categories',
+              detail:
+                'Across 3 categories',
               icon: Trophy,
               accent: 'text-blue-200',
               iconBg:
@@ -564,7 +704,8 @@ function Achievements() {
             },
             {
               label: 'Total XP',
-              value: totalXp.toLocaleString(),
+              value:
+                lifetimeXp.toLocaleString(),
               detail:
                 'A little closer every day',
               icon: Zap,
@@ -630,7 +771,7 @@ function Achievements() {
                   </span>
 
                   <span className="rounded-full border border-cyan-300/15 bg-cyan-300/[0.06] px-2 py-0.5 text-[10px] font-medium text-cyan-100">
-                    +300 XP
+                    Achievement reward
                   </span>
                 </div>
 
@@ -647,7 +788,8 @@ function Achievements() {
             <div className="w-full lg:w-64">
               <div className="mb-2 flex items-center justify-between text-xs">
                 <span className="text-slate-400">
-                  {currentStreak} / {nextMilestone} days
+                  {currentStreak} /{' '}
+                  {nextMilestone} days
                 </span>
 
                 <span className="font-semibold text-cyan-100">
@@ -674,44 +816,54 @@ function Achievements() {
         </section>
 
         <div className="space-y-7">
-          {dynamicCategories.map((category) => (
-            <section key={category.title}>
-              <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
-                <div>
-                  <h2 className="text-base font-semibold text-white sm:text-lg">
-                    {category.title}
-                  </h2>
+          {dynamicCategories.map(
+            (category) => (
+              <section
+                key={category.title}
+              >
+                <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+                  <div>
+                    <h2 className="text-base font-semibold text-white sm:text-lg">
+                      {category.title}
+                    </h2>
 
-                  <p className="mt-1 text-xs text-slate-500">
-                    {category.description}
-                  </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {category.description}
+                    </p>
+                  </div>
+
+                  <span className="text-xs text-slate-500">
+                    {
+                      category.achievements.filter(
+                        (achievement) =>
+                          achievement.status ===
+                          'unlocked',
+                      ).length
+                    }{' '}
+                    unlocked
+                  </span>
                 </div>
 
-                <span className="text-xs text-slate-500">
-                  {
-                    category.achievements.filter(
-                      (achievement) =>
-                        achievement.status ===
-                        'unlocked',
-                    ).length
-                  }{' '}
-                  unlocked
-                </span>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {category.achievements.map(
-                  (achievement) => (
-                    <AchievementCard
-                      key={achievement.title}
-                      achievement={achievement}
-                      tone={category.tone}
-                    />
-                  ),
-                )}
-              </div>
-            </section>
-          ))}
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {category.achievements.map(
+                    (achievement) => (
+                      <AchievementCard
+                        key={
+                          achievement.title
+                        }
+                        achievement={
+                          achievement
+                        }
+                        tone={
+                          category.tone
+                        }
+                      />
+                    ),
+                  )}
+                </div>
+              </section>
+            ),
+          )}
         </div>
 
         <section className="mt-7 rounded-2xl border border-slate-800/90 bg-slate-900/75 p-4 shadow-[0_18px_45px_rgba(2,6,23,0.22)] backdrop-blur-sm sm:p-5">
@@ -740,11 +892,14 @@ function Achievements() {
               )
               .slice(-3)
               .map((achievement) => {
-                const Icon = achievement.icon;
+                const Icon =
+                  achievement.icon;
 
                 return (
                   <article
-                    key={achievement.title}
+                    key={
+                      achievement.title
+                    }
                     className="flex items-center gap-3 rounded-xl border border-slate-800/80 bg-slate-950/35 p-3"
                   >
                     <span
@@ -753,7 +908,8 @@ function Achievements() {
                           ? categoryIconStyles[
                               achievement.color
                             ]
-                          : toneStyles.cyan.icon
+                          : toneStyles
+                              .cyan.icon
                       }`}
                     >
                       <Icon className="h-4 w-4" />
@@ -770,11 +926,27 @@ function Achievements() {
                     </div>
 
                     <span className="shrink-0 text-xs font-semibold text-amber-200">
-                      +{achievement.reward} XP
+                      +{achievement.reward}{' '}
+                      XP
                     </span>
                   </article>
                 );
               })}
+
+            {unlockedAchievements ===
+              0 && (
+              <div className="md:col-span-3 rounded-xl border border-dashed border-slate-800 bg-slate-950/25 p-6 text-center">
+                <Award className="mx-auto h-7 w-7 text-slate-700" />
+
+                <p className="mt-3 text-sm font-medium text-slate-400">
+                  Your first achievement is waiting.
+                </p>
+
+                <p className="mt-1 text-xs text-slate-600">
+                  Complete your daily missions to start unlocking badges.
+                </p>
+              </div>
+            )}
           </div>
         </section>
       </div>
