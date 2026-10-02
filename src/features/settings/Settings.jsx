@@ -16,6 +16,7 @@ import {
   Trophy,
   UserRound,
 } from 'lucide-react';
+import { useApp } from '../../context/AppContext';
 
 const SETTINGS_KEY = 'winterArcSettings';
 
@@ -154,55 +155,53 @@ function SectionHeader({ icon: Icon, eyebrow, title }) {
 }
 
 function Settings() {
-  const [settings, setSettings] = useState(() => {
-    const savedSettings = localStorage.getItem(SETTINGS_KEY);
-
-    if (!savedSettings) {
-      return defaultSettings;
-    }
-
-    try {
-      return {
-        ...defaultSettings,
-        ...JSON.parse(savedSettings),
-      };
-    } catch {
-      return defaultSettings;
-    }
-  });
+  const { settings, updateSetting } = useApp();
 
   const [message, setMessage] = useState('');
 
   useEffect(() => {
+    if (!settings) {
+      return;
+    }
+
     localStorage.setItem(
       SETTINGS_KEY,
-      JSON.stringify(settings),
+      JSON.stringify({
+        ...defaultSettings,
+        ...settings,
+      }),
     );
   }, [settings]);
 
-  const updateSetting = (key, value) => {
-    setSettings((current) => ({
-      ...current,
-      [key]: value,
-    }));
-
+  const showSavedMessage = () => {
     setMessage('Settings saved');
 
-    window.clearTimeout(window.settingsMessageTimer);
+    window.clearTimeout(
+      window.settingsMessageTimer,
+    );
 
-    window.settingsMessageTimer = window.setTimeout(() => {
-      setMessage('');
-    }, 1600);
+    window.settingsMessageTimer =
+      window.setTimeout(() => {
+        setMessage('');
+      }, 1600);
+  };
+
+  const changeSetting = (key, value) => {
+    updateSetting(key, value);
+    showSavedMessage();
   };
 
   const showActionMessage = (text) => {
     setMessage(text);
 
-    window.clearTimeout(window.settingsMessageTimer);
+    window.clearTimeout(
+      window.settingsMessageTimer,
+    );
 
-    window.settingsMessageTimer = window.setTimeout(() => {
-      setMessage('');
-    }, 1800);
+    window.settingsMessageTimer =
+      window.setTimeout(() => {
+        setMessage('');
+      }, 1800);
   };
 
   return (
@@ -233,7 +232,6 @@ function Settings() {
         </header>
 
         <div className="grid gap-6 lg:grid-cols-2">
-          {/* Appearance */}
           <GlassCard className="p-5 sm:p-6">
             <SectionHeader
               icon={Palette}
@@ -247,9 +245,13 @@ function Settings() {
               value={settings.theme}
               icon={SunMedium}
               control="select"
-              options={['Dark', 'Midnight', 'Dim']}
+              options={[
+                'Dark',
+                'Midnight',
+                'Dim',
+              ]}
               onChange={(value) =>
-                updateSetting('theme', value)
+                changeSetting('theme', value)
               }
             />
 
@@ -265,7 +267,10 @@ function Settings() {
                 'Aurora Green',
               ]}
               onChange={(value) =>
-                updateSetting('accentGlow', value)
+                changeSetting(
+                  'accentGlow',
+                  value,
+                )
               }
             />
 
@@ -276,7 +281,7 @@ function Settings() {
               control="toggle"
               enabled={settings.compactMode}
               onToggle={() =>
-                updateSetting(
+                changeSetting(
                   'compactMode',
                   !settings.compactMode,
                 )
@@ -284,7 +289,6 @@ function Settings() {
             />
           </GlassCard>
 
-          {/* Notifications */}
           <GlassCard className="p-5 sm:p-6">
             <SectionHeader
               icon={Bell}
@@ -296,9 +300,11 @@ function Settings() {
               label="Daily Mission Reminder"
               description="A nudge when your daily missions are waiting."
               control="toggle"
-              enabled={settings.dailyMissionReminder}
+              enabled={
+                settings.dailyMissionReminder
+              }
               onToggle={() =>
-                updateSetting(
+                changeSetting(
                   'dailyMissionReminder',
                   !settings.dailyMissionReminder,
                 )
@@ -311,7 +317,7 @@ function Settings() {
               control="toggle"
               enabled={settings.streakReminder}
               onToggle={() =>
-                updateSetting(
+                changeSetting(
                   'streakReminder',
                   !settings.streakReminder,
                 )
@@ -322,9 +328,11 @@ function Settings() {
               label="Achievement Notifications"
               description="Celebrate each milestone as it unlocks."
               control="toggle"
-              enabled={settings.achievementNotifications}
+              enabled={
+                settings.achievementNotifications
+              }
               onToggle={() =>
-                updateSetting(
+                changeSetting(
                   'achievementNotifications',
                   !settings.achievementNotifications,
                 )
@@ -335,9 +343,11 @@ function Settings() {
               label="Leaderboard Updates"
               description="See when your standing changes."
               control="toggle"
-              enabled={settings.leaderboardUpdates}
+              enabled={
+                settings.leaderboardUpdates
+              }
               onToggle={() =>
-                updateSetting(
+                changeSetting(
                   'leaderboardUpdates',
                   !settings.leaderboardUpdates,
                 )
@@ -345,7 +355,6 @@ function Settings() {
             />
           </GlassCard>
 
-          {/* Challenge */}
           <GlassCard className="p-5 sm:p-6">
             <SectionHeader
               icon={Trophy}
@@ -404,10 +413,12 @@ function Settings() {
                 <SettingRow
                   label="Streak Protection"
                   description="Keep one missed day from breaking your run."
-                  enabled={settings.streakProtection}
+                  enabled={
+                    settings.streakProtection
+                  }
                   control="toggle"
                   onToggle={() =>
-                    updateSetting(
+                    changeSetting(
                       'streakProtection',
                       !settings.streakProtection,
                     )
@@ -417,7 +428,6 @@ function Settings() {
             </div>
           </GlassCard>
 
-          {/* Privacy */}
           <GlassCard className="p-5 sm:p-6">
             <SectionHeader
               icon={ShieldCheck}
@@ -431,9 +441,13 @@ function Settings() {
               value={settings.profileVisibility}
               icon={Eye}
               control="select"
-              options={['Everyone', 'Friends', 'Private']}
+              options={[
+                'Everyone',
+                'Friends',
+                'Private',
+              ]}
               onChange={(value) =>
-                updateSetting(
+                changeSetting(
                   'profileVisibility',
                   value,
                 )
@@ -444,9 +458,11 @@ function Settings() {
               label="Show on Global Leaderboard"
               description="Let your progress appear in the global rankings."
               control="toggle"
-              enabled={settings.showGlobalLeaderboard}
+              enabled={
+                settings.showGlobalLeaderboard
+              }
               onToggle={() =>
-                updateSetting(
+                changeSetting(
                   'showGlobalLeaderboard',
                   !settings.showGlobalLeaderboard,
                 )
@@ -457,9 +473,11 @@ function Settings() {
               label="Show Current Streak"
               description="Make your consistency visible to friends."
               control="toggle"
-              enabled={settings.showCurrentStreak}
+              enabled={
+                settings.showCurrentStreak
+              }
               onToggle={() =>
-                updateSetting(
+                changeSetting(
                   'showCurrentStreak',
                   !settings.showCurrentStreak,
                 )
@@ -468,7 +486,6 @@ function Settings() {
           </GlassCard>
         </div>
 
-        {/* Account */}
         <GlassCard className="mt-6 p-5 sm:p-6">
           <SectionHeader
             icon={CircleUserRound}
@@ -487,6 +504,7 @@ function Settings() {
               className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-950/45 p-3 text-left transition hover:border-cyan-400/30 hover:bg-slate-800/50"
             >
               <UserRound className="h-4 w-4 text-cyan-200" />
+
               <span className="text-sm font-semibold text-slate-200">
                 Profile
               </span>
