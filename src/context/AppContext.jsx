@@ -2,7 +2,6 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { dailyTasks as initialTasks } from '../features/tasks/taskData';
 import {
   getTodayKey,
-  getYesterdayKey,
   saveDailyProgress,
 } from '../data/dailyHistory';
 
@@ -29,6 +28,7 @@ function getNextRank(streak) {
   if (streak < 90) return 'Winter Master';
   return 'Complete';
 }
+
 function getCurrentStreak() {
   let streak = 0;
   let checkDate = new Date();
@@ -39,6 +39,7 @@ function getCurrentStreak() {
     const day = String(checkDate.getDate()).padStart(2, '0');
 
     const dateKey = `${year}-${month}-${day}`;
+
     const completed = localStorage.getItem(
       `winterArcCompleted-${dateKey}`,
     );
@@ -56,60 +57,32 @@ function getCurrentStreak() {
 
 export function AppProvider({ children }) {
   const todayKey = getTodayKey();
-  const yesterdayKey = getYesterdayKey();
 
   const [tasks, setTasks] = useState(() => {
-    const savedTasks = localStorage.getItem(`winterArcTasks-${todayKey}`);
+    const savedTasks = localStorage.getItem(
+      `winterArcTasks-${todayKey}`,
+    );
 
-    return savedTasks ? JSON.parse(savedTasks) : initialTasks;
+    return savedTasks
+      ? JSON.parse(savedTasks)
+      : initialTasks;
   });
 
   const [currentStreak, setCurrentStreak] = useState(() =>
-  getCurrentStreak(),
-);
-
-const [bestStreak, setBestStreak] = useState(() => {
-  const savedBest = localStorage.getItem('winterArcBestStreak');
-
-  return savedBest ? Number(savedBest) : 0;
-});
-
-  useEffect(() => {
-  localStorage.setItem(
-    `winterArcTasks-${todayKey}`,
-    JSON.stringify(tasks),
+    getCurrentStreak(),
   );
 
-  const categories = [
-    'Fitness',
-    'Coding',
-    'Study',
-    'English',
-  ];
-
-  const dailyProgress = categories.reduce((result, category) => {
-    const categoryTasks = tasks.filter(
-      (task) => task.category === category,
+  const [bestStreak, setBestStreak] = useState(() => {
+    const savedBest = localStorage.getItem(
+      'winterArcBestStreak',
     );
 
-    const completedTasks = categoryTasks.filter(
-      (task) => task.completed,
-    );
+    return savedBest ? Number(savedBest) : 0;
+  });
 
-    result[category] =
-      categoryTasks.length > 0
-        ? Math.round(
-            (completedTasks.length / categoryTasks.length) * 100,
-          )
-        : 0;
-
-    return result;
-  }, {});
-
-  saveDailyProgress(todayKey, dailyProgress);
-}, [tasks, todayKey]);
-
-  const completedTasks = tasks.filter((task) => task.completed);
+  const completedTasks = tasks.filter(
+    (task) => task.completed,
+  );
 
   const totalXp = completedTasks.reduce(
     (sum, task) => sum + task.xp,
@@ -122,45 +95,129 @@ const [bestStreak, setBestStreak] = useState(() => {
   );
 
   const completedTaskCount = completedTasks.length;
+
   const isTodayComplete =
-  tasks.length > 0 && completedTaskCount === tasks.length;
+    tasks.length > 0 &&
+    completedTaskCount === tasks.length;
+
   useEffect(() => {
-  const completionKey = `winterArcCompleted-${todayKey}`;
-
-  if (isTodayComplete) {
-    localStorage.setItem(completionKey, 'true');
-  } else {
-    localStorage.removeItem(completionKey);
-  }
-
-  const updatedStreak = getCurrentStreak();
-
-  setCurrentStreak(updatedStreak);
-
-  setBestStreak((previousBest) => {
-    const nextBest = Math.max(previousBest, updatedStreak);
-
     localStorage.setItem(
-      'winterArcBestStreak',
-      String(nextBest),
+      `winterArcTasks-${todayKey}`,
+      JSON.stringify(tasks),
     );
 
-    return nextBest;
-  });
-}, [isTodayComplete, todayKey]);
+    const categories = [
+      'Fitness',
+      'Coding',
+      'Study',
+      'English',
+    ];
+
+    const dailyProgress = categories.reduce(
+      (result, category) => {
+        const categoryTasks = tasks.filter(
+          (task) => task.category === category,
+        );
+
+        const completedCategoryTasks =
+          categoryTasks.filter(
+            (task) => task.completed,
+          );
+
+        result[category] =
+          categoryTasks.length > 0
+            ? Math.round(
+                (completedCategoryTasks.length /
+                  categoryTasks.length) *
+                  100,
+              )
+            : 0;
+
+        return result;
+      },
+      {},
+    );
+
+    const dailyHistoryEntry = {
+      ...dailyProgress,
+      completedTaskCount,
+      totalTaskCount: tasks.length,
+      xpEarned: totalXp,
+      totalPossibleXp,
+      completedTaskIds: completedTasks.map(
+        (task) => task.id,
+      ),
+    };
+
+    saveDailyProgress(
+      todayKey,
+      dailyHistoryEntry,
+    );
+  }, [
+    tasks,
+    todayKey,
+    completedTaskCount,
+    totalXp,
+    totalPossibleXp,
+  ]);
+
+  useEffect(() => {
+    const completionKey =
+      `winterArcCompleted-${todayKey}`;
+
+    if (isTodayComplete) {
+      localStorage.setItem(
+        completionKey,
+        'true',
+      );
+    } else {
+      localStorage.removeItem(
+        completionKey,
+      );
+    }
+
+    const updatedStreak = getCurrentStreak();
+
+    setCurrentStreak(updatedStreak);
+
+    setBestStreak((previousBest) => {
+      const nextBest = Math.max(
+        previousBest,
+        updatedStreak,
+      );
+
+      localStorage.setItem(
+        'winterArcBestStreak',
+        String(nextBest),
+      );
+
+      return nextBest;
+    });
+  }, [isTodayComplete, todayKey]);
 
   const taskProgress =
     tasks.length > 0
-      ? Math.min((completedTaskCount / tasks.length) * 100, 100)
+      ? Math.min(
+          (completedTaskCount / tasks.length) *
+            100,
+          100,
+        )
       : 0;
 
   const xpProgress =
     totalPossibleXp > 0
-      ? Math.min((totalXp / totalPossibleXp) * 100, 100)
+      ? Math.min(
+          (totalXp / totalPossibleXp) *
+            100,
+          100,
+        )
       : 0;
 
-  const rank = getRankFromStreak(currentStreak);
-  const nextRank = getNextRank(currentStreak);
+  const rank =
+    getRankFromStreak(currentStreak);
+
+  const nextRank =
+    getNextRank(currentStreak);
 
   const level = Math.max(
     1,
@@ -168,12 +225,15 @@ const [bestStreak, setBestStreak] = useState(() => {
   );
 
   const xpIntoLevel = totalXp % 100;
+
   const levelProgress = xpIntoLevel;
 
   const toggleTask = (taskId) => {
     setTasks((currentTasks) =>
       currentTasks.map((task) => {
-        if (task.id !== taskId) return task;
+        if (task.id !== taskId) {
+          return task;
+        }
 
         return {
           ...task,
@@ -214,7 +274,9 @@ export function useApp() {
   const context = useContext(AppContext);
 
   if (!context) {
-    throw new Error('useApp must be used within an AppProvider');
+    throw new Error(
+      'useApp must be used within an AppProvider',
+    );
   }
 
   return context;

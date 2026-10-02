@@ -46,11 +46,40 @@ export function getDailyHistory() {
     const dateKey = key.replace('winterArcProgress-', '');
 
     try {
-      history[dateKey] = JSON.parse(localStorage.getItem(key));
+      history[dateKey] = JSON.parse(
+        localStorage.getItem(key),
+      );
     } catch {
       history[dateKey] = null;
     }
   });
 
   return history;
+}
+
+export function getLifetimeStats() {
+  const history = getDailyHistory();
+
+  const days = Object.values(history).filter(Boolean);
+
+  return days.reduce(
+    (totals, day) => {
+      totals.completedTasks += Number(
+        day.completedTaskCount || 0,
+      );
+
+      totals.totalXp += Number(day.xpEarned || 0);
+
+      totals.totalPossibleXp += Number(
+        day.totalPossibleXp || 0,
+      );
+
+      return totals;
+    },
+    {
+      completedTasks: 0,
+      totalXp: 0,
+      totalPossibleXp: 0,
+    },
+  );
 }
