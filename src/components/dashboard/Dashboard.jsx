@@ -16,40 +16,7 @@ import { useApp } from '../../context/AppContext';
 import StreakCard from './StreakCard';
 import ProgressChart from './ProgressChart';
 
-const summaryStats = [
-  {
-    label: 'Current streak',
-    value: '18 days',
-    detail: '+3 this week',
-    icon: Flame,
-    accent: 'from-orange-400/20 via-amber-400/10 to-transparent',
-    iconClass: 'bg-orange-500/15 text-orange-200',
-  },
-  {
-    label: 'Current rank',
-    value: '#12',
-    detail: 'Top 8%',
-    icon: Trophy,
-    accent: 'from-cyan-400/20 via-sky-400/10 to-transparent',
-    iconClass: 'bg-cyan-500/15 text-cyan-100',
-  },
-  {
-    label: 'XP',
-    value: '4,680',
-    detail: 'Level 18',
-    icon: Zap,
-    accent: 'from-violet-400/20 via-fuchsia-400/10 to-transparent',
-    iconClass: 'bg-violet-500/15 text-violet-100',
-  },
-  {
-    label: 'Focus',
-    value: '87%',
-    detail: 'Consistency',
-    icon: Gauge,
-    accent: 'from-emerald-400/20 via-teal-400/10 to-transparent',
-    iconClass: 'bg-emerald-500/15 text-emerald-100',
-  },
-];
+
 
 const focusProgress = [
   { label: 'Fitness', value: 84, icon: Dumbbell, color: 'bg-cyan-400', glow: 'shadow-cyan-500/20' },
@@ -65,7 +32,19 @@ const recentActivity = [
 ];
 
 function Dashboard({ user = { name: 'Aiden' } }) {
-  const { tasks, totalXp, completedTaskCount, taskProgress, xpProgress, currentStreak, bestStreak } = useApp();
+  const {
+  tasks,
+  totalXp,
+  completedTaskCount,
+  taskProgress,
+  xpProgress,
+  currentStreak,
+  bestStreak,
+  rank,
+  nextRank,
+  level,
+  levelProgress,
+} = useApp();
 
   const summaryStats = [
     {
@@ -87,7 +66,7 @@ function Dashboard({ user = { name: 'Aiden' } }) {
     {
       label: 'XP',
       value: totalXp.toLocaleString(),
-      detail: 'Level 18',
+      detail: `Level ${level}`,
       icon: Zap,
       accent: 'from-violet-400/20 via-fuchsia-400/10 to-transparent',
       iconClass: 'bg-violet-500/15 text-violet-100',
@@ -177,10 +156,13 @@ function Dashboard({ user = { name: 'Aiden' } }) {
               </article>
 
               <StreakCard
-                currentStreak={currentStreak}
-                bestStreak={bestStreak}
-                xpEarnedToday={totalXp}
-                nextRankProgress={xpProgress}
+                 currentStreak={currentStreak}
+                 bestStreak={bestStreak}
+                 rank={rank}
+                 nextRank={nextRank}
+                 xpEarnedToday={totalXp}
+                 level={level}
+                 levelProgress={levelProgress}
               />
             </div>
 
